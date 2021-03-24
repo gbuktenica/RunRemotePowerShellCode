@@ -65,9 +65,9 @@ param (
 )
 if ($null -eq $ScriptBlock) {
     $ScriptBlock = {
-        # This Code is executed on the Remote Machine
-        Write-Output $env:COMPUTERNAME
-        Write-Output "Hello World"
+        # This Code is remote script block.
+        # Replace everything with in these braces "{}" with the code that is to be run against the remote computers.
+        Write-Output "Hello $env:COMPUTERNAME"
     }
 }
 function Get-SavedCredentials {
