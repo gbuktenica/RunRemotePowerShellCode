@@ -20,6 +20,10 @@
     This PsCredential is the security context that will be used to run the remote code.
     If this is omitted the operator will be prompted for credential at first run.
 
+.PARAMETER Renew
+    Prompts the user for a new password for an existing saved credential.
+    To be used after a password change.
+
 .PARAMETER AsJob
     This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
 
@@ -59,6 +63,9 @@ param (
     [Parameter()]
     [pscredential]
     $Credential,
+    [Parameter()]
+    [switch]
+    $Renew,
     [Parameter()]
     [switch]
     $AsJob
@@ -161,12 +168,12 @@ function Get-SavedCredentials {
 }
 
 if ($null -eq $Credential) {
-    $Credential = Get-SavedCredentials -Title Admin
+    $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
 }
 
-# Generate List of servers
+# Generate the list of computer names.
 if ($SourceType -eq "List") {
-    # List selected so read file.
+    # List SourceType selected, so read the text file.
     if ($ListPath.length -eq 0) {
         Write-Verbose "`$SourceType is list but `$ListPath is null so prompt operator for file path."
         if (-not (Get-Module -Name "FileSystemForms")) {
@@ -185,7 +192,7 @@ if ($SourceType -eq "List") {
     }
     $ComputerNames = Get-Content $ListPath
 } elseif ($SourceType -eq "Directory") {
-    # Check for dependencies and install if missing.
+    # Check for installed dependencies and install if missing and possible to install.
     if (-not(Get-Module -Name "ActiveDirectory")) {
         if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
             Write-Verbose "Workstation Operating System detected"
