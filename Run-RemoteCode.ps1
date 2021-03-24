@@ -1,21 +1,44 @@
 <#
 .SYNOPSIS
-    Runs a Script Block on a list of Remote Computers
+    Runs a Script Block on a list of remote computers.
+
 .DESCRIPTION
-    Long description
+    This script runs an operator defined block of PowerShell code remotely against a list of computers.
+    The list of computer can be either a plain text file of computer names or a filter of computer objects found in Active Directory.
+
 .PARAMETER SourceType
     This string determines the source of computer names that the script will be actioned against.
+
 .PARAMETER ListPath
     This string is the path to the plain text list of computer names that will be targeted.
     The text file should have one computer name per line.
+
+.PARAMETER ScriptBlock
+    This string is the code that will be run on the remote computers.
+
+.PARAMETER Credential
+    This PsCredential is the security context that will be used to run the remote code.
+    If this is omitted the operator will be prompted for credential at first run.
+
 .PARAMETER AsJob
-    This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
+This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
+
 .EXAMPLE
     .\Run-RemoteCode.ps1 -List
-    Will run the Script Block against a list of computers names that are contained in a plain text file.
+    Will run the internal Script Block against a list of computers names that are contained in a plain text file.
     As the ListPath parameter is not used the operator will be prompted for the path of the text file.
+
+.EXAMPLE
+    .\Run-RemoteCode.ps1 -List -ListPath c:\scripts\computers.txt -ScriptBlock {Write-Output "Hello World"} -AsJob
+    Will run the external Script Block:
+        Write-Output "Hello World"
+    against a list of computers names that are contained in the plain text file "c:\scripts\computers.txt"
+    Each remote computer will be executed as a parallel job.
+    If this is the first run of the script the operator will be prompted to enter privileged credentials.
+
 .LINK
     https://github.com/gbuktenica/RunRemotePowerShellCode
+
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
@@ -24,7 +47,7 @@
 [CmdletBinding()]
 param (
     [Parameter()]
-    [ValidateSet('List','Directory')]
+    [ValidateSet('List', 'Directory')]
     [string]
     $SourceType = 'List',
     [Parameter()]
@@ -33,6 +56,9 @@ param (
     [Parameter()]
     [string]
     $ScriptBlock,
+    [Parameter()]
+    [pscredential]
+    $Credential,
     [Parameter()]
     [switch]
     $AsJob
@@ -134,7 +160,9 @@ function Get-SavedCredentials {
     }
 }
 
-$Credential = Get-SavedCredentials -Title Admin
+if ($null -eq $Credential) {
+    $Credential = Get-SavedCredentials -Title Admin
+}
 
 # Generate List of servers
 if ($SourceType -eq "List") {
@@ -181,11 +209,14 @@ if ($SourceType -eq "List") {
 # Run Scriptblock on all computers
 
 foreach ($ComputerName in $ComputerNames) {
+    Write-Output "======================================"
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
-        Write-Output "======================================"
         Write-Output $ComputerName
         Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock
     } else {
         Write-Output "Computer $ComputerName not online"
     }
+}
+if ($AsJob) {
+    Get-Job | Receive-Job | Remove-Job
 }
