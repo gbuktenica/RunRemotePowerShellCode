@@ -59,7 +59,7 @@ function Get-SavedCredentials {
     .EXAMPLE
         Enter-PsSession -ComputerName Computer -Credential (Get-SavedCredentials)
     .EXAMPLE
-        $Credential = Get-SavedCredentials -Title Normal -VaultPath c:\temp\myfile.json
+        $Credential = Get-SavedCredentials -Title Normal -VaultPath c:\temp\myFile.json
     .LINK
         https://github.com/gbuktenica/GetSavedCredentials
     .NOTES
@@ -135,7 +135,7 @@ $Credential = Get-SavedCredentials -Title Admin
 if ($SourceType -eq "List") {
     # List selected so read file.
     if ($ListPath.length -eq 0) {
-        Write-Verbose "`$Sourcetype is list but `$ListPath is null so prompt operator for file path."
+        Write-Verbose "`$SourceType is list but `$ListPath is null so prompt operator for file path."
         if (-not (Get-Module -Name "FileSystemForms")) {
             if (((Get-PackageProvider -Name nuget -ErrorAction SilentlyContinue).version) -lt [version]"2.8.5.201") {
                 Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
@@ -152,9 +152,9 @@ if ($SourceType -eq "List") {
     }
     $ComputerNames = Get-Content $ListPath
 } elseif ($SourceType -eq "Directory") {
-    # Check for dependancies and install if missing.
+    # Check for dependencies and install if missing.
     if (-not(Get-Module -Name "ActiveDirectory")) {
-        if (((Get-CimInstance -ClassName Win32_OperatingSystem).producttype) -eq 1) {
+        if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
             Write-Verbose "Workstation Operating System detected"
             if ([Environment]::OSVersion.Version -ge [version]"10.0.18090") {
                 Write-Verbose "Window 10 build greater than 1809 detected"
