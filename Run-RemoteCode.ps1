@@ -31,14 +31,19 @@ param (
     [string]
     $ListPath,
     [Parameter()]
+    [string]
+    $ScriptBlock,
+    [Parameter()]
     [switch]
     $AsJob
 )
-$ScriptBlock = {
-    # This Code is executed on the Remote Machine
-    Write-Host "Hello World"
+if ($null -eq $ScriptBlock) {
+    $ScriptBlock = {
+        # This Code is executed on the Remote Machine
+        Write-Output $env:COMPUTERNAME
+        Write-Output "Hello World"
+    }
 }
-
 function Get-SavedCredentials {
     <#
     .SYNOPSIS
