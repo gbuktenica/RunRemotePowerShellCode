@@ -123,7 +123,7 @@ function Get-SavedCredentials {
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
         Get-SavedCredentials -Title $Title -VaultPath $VaultPath
     }
-    If ($JsonChanged) {
+    if ($JsonChanged) {
         # Save the Json object to file if it has changed.
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
     }
@@ -175,12 +175,12 @@ if ($SourceType -eq "List") {
 
 # Run Scriptblock on all computers
 
-Foreach ($ComputerName in $ComputerNames) {
-    If (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
+foreach ($ComputerName in $ComputerNames) {
+    if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         Write-Output "======================================"
         Write-Output $ComputerName
         Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock
-    } Else {
+    } else {
         Write-Output "Computer $ComputerName not online"
     }
 }
