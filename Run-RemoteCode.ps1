@@ -21,7 +21,7 @@
     If this is omitted the operator will be prompted for credential at first run.
 
 .PARAMETER AsJob
-This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
+    This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
 
 .EXAMPLE
     .\Run-RemoteCode.ps1 -List
