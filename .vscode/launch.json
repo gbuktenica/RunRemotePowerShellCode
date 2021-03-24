@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run-RemoteCode",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-List",
+                "-ListPath ${workspaceFolder}/ComputerNames.txt",
+                "-ScriptBlock {Write-Output \"Hello World\"}"
+            ],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
