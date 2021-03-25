@@ -2,7 +2,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run-RemoteCode",
+            "name": "Run-RemoteCode List Internal",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-List",
+                "-ListPath ${workspaceFolder}/ComputerNames.txt"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Run-RemoteCode List External",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
