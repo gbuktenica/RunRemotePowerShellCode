@@ -25,6 +25,31 @@
                 "-ScriptBlock {Write-Output \"Hello World\"}"
             ],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Run-RemoteCode Directory Internal",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType Directory",
+                "-ListPath \"${workspaceFolder}/ComputerNames.txt\""
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Run-RemoteCode Directory External",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType Directory",
+                "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
+                "-ScriptBlock {Write-Output \"Hello World\"}"
+            ],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
