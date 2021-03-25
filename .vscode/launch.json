@@ -34,7 +34,7 @@
             "args": [
                 "-Verbose",
                 "-SourceType Directory",
-                "-ListPath \"${workspaceFolder}/ComputerNames.txt\""
+                "-Filter \"*\""
             ],
             "cwd": "${workspaceFolder}"
         },
@@ -46,7 +46,7 @@
             "args": [
                 "-Verbose",
                 "-SourceType Directory",
-                "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
+                "-Filter \"*\"",
                 "-ScriptBlock {Write-Output \"Hello World\"}"
             ],
             "cwd": "${workspaceFolder}"

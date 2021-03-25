@@ -13,6 +13,10 @@
     This string is the path to the plain text list of computer names that will be targeted.
     The text file should have one computer name per line.
 
+.PARAMETER Filter
+    This string is the filter used to find computer objects in Active Directory.
+    The text file should have one computer name per line.
+
 .PARAMETER ScriptBlock
     This ScriptBlock is the code that will be run on the remote computers.
 
@@ -28,16 +32,21 @@
     This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -List
+    .\Run-RemoteCode.ps1 -SourceType List
     Will run the internal Script Block against a list of computers names that are contained in a plain text file.
     As the ListPath parameter is not used the operator will be prompted for the path of the text file.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -List -ListPath c:\scripts\computers.txt -ScriptBlock {Write-Output "Hello World"} -AsJob
+    .\Run-RemoteCode.ps1 -SourceType List -ListPath c:\scripts\computers.txt -ScriptBlock {Write-Output "Hello World"} -AsJob
     Will run the external Script Block:
         Write-Output "Hello World"
     against a list of computers names that are contained in the plain text file "c:\scripts\computers.txt"
     Each remote computer will be executed as a parallel job.
+    If this is the first run of the script the operator will be prompted to enter privileged credentials.
+
+.EXAMPLE
+    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*"
+    Will run the internal Script Block against all computers object  that are contained in the default Active Directory
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .LINK
@@ -57,6 +66,9 @@ param (
     [Parameter()]
     [string]
     $ListPath,
+    [Parameter()]
+    [string]
+    $Filter,
     [Parameter()]
     [ScriptBlock]
     $ScriptBlock,
@@ -198,7 +210,9 @@ if ($SourceType -eq "List") {
             Write-Verbose "Workstation Operating System detected"
             if ([Environment]::OSVersion.Version -ge [version]"10.0.18090") {
                 Write-Verbose "Window 10 build greater than 1809 detected"
-                Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0
+                # TODO
+                # The following command requires elevation
+                Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop
             } else {
                 Write-Error "Install RSAT tools to enable PowerShell Active Directory Module to continue." -ErrorAction Stop
                 exit 1
@@ -209,8 +223,8 @@ if ($SourceType -eq "List") {
             Install-WindowsFeature -Name RSAT-AD-PowerShell
         }
     }
-    Import-Module -Name "ActiveDirectory"
-    $ComputerNames = Get-ADComputer
+    Import-Module -Name "ActiveDirectory" -ErrorAction Stop
+    $ComputerNames = (Get-ADComputer -Filter $Filter).DNSHostName
 }
 
 # Run Scriptblock on all computers
