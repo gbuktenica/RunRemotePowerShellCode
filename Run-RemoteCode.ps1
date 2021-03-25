@@ -14,14 +14,14 @@
     The text file should have one computer name per line.
 
 .PARAMETER ScriptBlock
-    This string is the code that will be run on the remote computers.
+    This ScriptBlock is the code that will be run on the remote computers.
 
 .PARAMETER Credential
     This PsCredential is the security context that will be used to run the remote code.
     If this is omitted the operator will be prompted for credential at first run.
 
 .PARAMETER Renew
-    Prompts the user for a new password for an existing saved credential.
+    THis switch prompts the user for a new password for an existing saved credential.
     To be used after a password change.
 
 .PARAMETER AsJob
@@ -58,7 +58,7 @@ param (
     [string]
     $ListPath,
     [Parameter()]
-    [string]
+    [ScriptBlock]
     $ScriptBlock,
     [Parameter()]
     [pscredential]

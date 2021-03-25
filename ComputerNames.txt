@@ -1,2 +1,1 @@
-Server1
-Desktop1
+AUTSTAPP01
