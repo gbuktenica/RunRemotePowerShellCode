@@ -8,8 +8,8 @@
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
             "args": [
                 "-Verbose",
-                "-List",
-                "-ListPath ${workspaceFolder}/ComputerNames.txt"
+                "-SourceType List",
+                "-ListPath \"${workspaceFolder}/ComputerNames.txt\""
             ],
             "cwd": "${workspaceFolder}"
         },
@@ -20,8 +20,8 @@
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
             "args": [
                 "-Verbose",
-                "-List",
-                "-ListPath ${workspaceFolder}/ComputerNames.txt",
+                "-SourceType List",
+                "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
                 "-ScriptBlock {Write-Output \"Hello World\"}"
             ],
             "cwd": "${workspaceFolder}"
