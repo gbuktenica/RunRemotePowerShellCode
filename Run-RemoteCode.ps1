@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-    Runs a Script Block on a list of remote computers.
+    Runs a Script Block and / or a file copy on a list of remote computers.
 
 .DESCRIPTION
     This script runs an operator defined block of PowerShell code remotely against a list of computers.
+    Optionally any locally required files can be copied first.
     The list of computer can be either a plain text file of computer names or a filter of computer objects found in Active Directory.
 
 .PARAMETER SourceType
@@ -47,26 +48,26 @@
     This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType List
-    Will run the internal Script Block against a list of computers names that are contained in a plain text file.
+    .\Run-RemoteCode.ps1 -SourceType List -ScriptBlockFilePath ScriptBlock.ps1
+    Will run the contents of ScriptBlock.ps1 against a list of computers names that are contained in a plain text file.
     As the ListPath parameter is not used the operator will be prompted for the path of the text file.
 
 .EXAMPLE
     .\Run-RemoteCode.ps1 -SourceType List -ListPath c:\scripts\computers.txt -ScriptBlock {Write-Output "Hello World"} -AsJob
-    Will run the external Script Block:
+    Will run the inline Script Block:
         Write-Output "Hello World"
     against a list of computers names that are contained in the plain text file "c:\scripts\computers.txt"
     Each remote computer will be executed as a parallel job.
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*"
-    Will run the internal Script Block against all computers object that are contained in the default Active Directory
+    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -ScriptBlock {Write-Output "Hello World"}
+    Will run the inline Script Block against all computer objects that are contained in the default Active Directory.
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -SourcePath \\FileServer\Files -DestinationPath C:\Windows\temp
-    Will run the internal Script Block against all computers object that are contained in the default Active Directory
+    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
+    Will copy the contents of \\FileServer\Files to C$\Windows\temp on all computer objects that are contained in the default Active Directory.
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .LINK
@@ -286,15 +287,17 @@ foreach ($ComputerName in $ComputerNames) {
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
             }
         }
-        Write-Verbose "Starting Invoke-Command"
-        try {
-            Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
-        } catch [System.Management.Automation.DriveNotFoundException] {
-            Write-Warning "Computer $ComputerName connection failed"
-            Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
-        } catch {
-            Write-Warning "Computer $ComputerName : $_.Exception.Message"
-            Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+        if ($ScriptBlock.length -gt 0) {
+            Write-Verbose "Starting Invoke-Command"
+            try {
+                Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+            } catch [System.Management.Automation.DriveNotFoundException] {
+                Write-Warning "Computer $ComputerName connection failed"
+                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+            } catch {
+                Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+            }
         }
     } else {
         Write-Warning "Computer $ComputerName not online"
