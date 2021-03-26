@@ -24,8 +24,8 @@
                 "-SourceType List",
                 "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
                 "-ScriptBlockFilePath \"${workspaceFolder}/ScriptBlock.ps1\"",
-                "-SourcePath \\\\",
-                "-DestinationPath C:/ITAdmin"
+                "-SourcePath \"\\\\monadelphous/software/5.0 ICT Applications/Azure Migrate/MMA\"",
+                "-DestinationPath C$/ITAdmin"
             ],
             "cwd": "${workspaceFolder}"
         },

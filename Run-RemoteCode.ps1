@@ -24,10 +24,16 @@
     This string this the path to a file that contains the code that will be run on the remote computers.
 
 .PARAMETER SourcePath
-    This string is the source path to a directory that contains file that need to be copied to the remote computer.
+    This string is the source path to a directory that contains file that need to be copied to the remote computers.
+    This must be a whole UNC path accessible from the operator workstation.
+    Example \\FILESERVER\FOLDER
 
 .PARAMETER DestinationPath
-    This string is the destination path to a directory on the remoter computer that will contain file that need to be copied to the remote computer.
+    This string is the destination path to a directory on the remoter computers that will contain file that need to be copied to the remote computers.
+    This must be a UNC path accessible from the operator workstation but excluding the remote computer hostname.
+    Example C$\Windows\TEMP
+    Example LOCALSHARE\LOCALSUBFOLDER
+    The script will loop through and copy the files to the remote computers.
 
 .PARAMETER Credential
     This PsCredential is the security context that will be used to run the remote code.
@@ -55,7 +61,12 @@
 
 .EXAMPLE
     .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*"
-    Will run the internal Script Block against all computers object  that are contained in the default Active Directory
+    Will run the internal Script Block against all computers object that are contained in the default Active Directory
+    If this is the first run of the script the operator will be prompted to enter privileged credentials.
+
+.EXAMPLE
+    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -SourcePath \\FileServer\Files -DestinationPath C:\Windows\temp
+    Will run the internal Script Block against all computers object that are contained in the default Active Directory
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .LINK
@@ -250,6 +261,11 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     Write-Verbose "File copy requested"
     Write-Verbose "SourcePath: $SourcePath"
     Write-Verbose "DestinationPath: $DestinationPath"
+    # Clean up old PSDrives if not cleaned up in previous execution
+    try {
+        Remove-PSDrive -Name Source -ErrorAction Stop -Force
+        Remove-PSDrive -Name Destination -ErrorAction Stop -Force
+    } catch {}
     New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential
 }
 
@@ -260,9 +276,9 @@ foreach ($ComputerName in $ComputerNames) {
         Write-Output $ComputerName
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
             Write-Verbose "Performing file copy"
-            New-PSDrive -Name Destination -Root $DestinationPath -PSProvider FileSystem -Credential $Credential
+            New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential
             Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
-            Remove-PSDrive -Name Destination
+            Remove-PSDrive -Name Destination -Force
         }
         Write-Verbose "Starting Invoke-Command"
         Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock
@@ -270,7 +286,11 @@ foreach ($ComputerName in $ComputerNames) {
         Write-Output "Computer $ComputerName not online"
     }
 }
-Remove-PSDrive -Name Source
+try {
+    Remove-PSDrive -Name Source -ErrorAction Stop -Force
+    Remove-PSDrive -Name Destination -ErrorAction Stop -Force
+} catch {}
+
 if ($AsJob) {
     Get-Job | Receive-Job | Remove-Job
 }
