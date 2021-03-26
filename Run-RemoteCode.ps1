@@ -245,20 +245,32 @@ if ($SourceType -eq "List") {
     $ComputerNames = (Get-ADComputer -Filter $Filter).DNSHostName
 }
 
-if ($SourcePath.Length -gt 0 and $DestinationPath.Length -gt 0) {
-    
+# If a file copy is being done map a drive with credentials
+if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
+    Write-Verbose "File copy requested"
+    Write-Verbose "SourcePath: $SourcePath"
+    Write-Verbose "DestinationPath: $DestinationPath"
+    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential
 }
 
-# Run the scriptblock on all computers
+# Run the remote jobs on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         Write-Output $ComputerName
+        if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
+            Write-Verbose "Performing file copy"
+            New-PSDrive -Name Destination -Root $DestinationPath -PSProvider FileSystem -Credential $Credential
+            Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
+            Remove-PSDrive -Name Destination
+        }
+        Write-Verbose "Starting Invoke-Command"
         Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock
     } else {
         Write-Output "Computer $ComputerName not online"
     }
 }
+Remove-PSDrive -Name Source
 if ($AsJob) {
     Get-Job | Receive-Job | Remove-Job
 }

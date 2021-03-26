@@ -15,6 +15,21 @@
             "cwd": "${workspaceFolder}"
         },
         {
+            "name": "Run-RemoteCode List File Copy",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType List",
+                "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
+                "-ScriptBlockFilePath \"${workspaceFolder}/ScriptBlock.ps1\"",
+                "-SourcePath \\\\",
+                "-DestinationPath C:/ITAdmin"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
             "name": "Run-RemoteCode List Inline Parameter",
             "type": "PowerShell",
             "request": "launch",
