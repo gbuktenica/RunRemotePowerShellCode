@@ -275,15 +275,26 @@ foreach ($ComputerName in $ComputerNames) {
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         Write-Output $ComputerName
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-            Write-Verbose "Performing file copy"
-            New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential
-            Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
-            Remove-PSDrive -Name Destination -Force
+            Write-Verbose "Starting file copy"
+            try {
+                New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop
+                Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
+                Remove-PSDrive -Name Destination -Force -ErrorAction Stop
+            } catch {
+                 Write-Warning "Computer $ComputerName connection failed"
+                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+            }
         }
         Write-Verbose "Starting Invoke-Command"
-        Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock
+        try {
+            Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+        } catch {
+            Write-Warning "Computer $ComputerName connection failed"
+            Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+        }
     } else {
-        Write-Output "Computer $ComputerName not online"
+        Write-Warning "Computer $ComputerName not online"
+        Add-Content -Path (($PSCommandPath).split(".")[0] + ".NotOnline.txt") -Value $ComputerName
     }
 }
 try {
