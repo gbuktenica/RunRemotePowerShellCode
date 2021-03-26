@@ -214,7 +214,7 @@ if ($SourceType -eq "List") {
                 # The following command requires elevation
                 Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop
             } else {
-                Write-Error "Install RSAT tools to enable PowerShell Active Directory Module to continue." -ErrorAction Stop
+                Write-Error "`nActive Directory Module not found. `nInstall RSAT tools to enable: `nhttps://www.microsoft.com/en-us/download/details.aspx?id=45520" -ErrorAction Stop
                 exit 1
             }
         } else {
