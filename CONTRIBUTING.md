@@ -13,3 +13,7 @@ To confirm that it is set run:
 ```bash
 git config --local --get core.hooksPath
 ```
+
+## Error trapping
+
+$Error[0].Exception.GetType().FullName
