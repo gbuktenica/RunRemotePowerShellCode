@@ -1,0 +1,72 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run-RemoteCode List File",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType List",
+                "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
+                "-ScriptBlockFilePath \"${workspaceFolder}/ScriptBlock.ps1\""
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Run-RemoteCode List File Copy",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType List",
+                "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
+                "-ScriptBlockFilePath \"${workspaceFolder}/ScriptBlock.ps1\"",
+                "-SourcePath \"\\\\FileServer/Share/SubFolder\"",
+                "-DestinationPath \"C$/Windows/Temp\""
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Run-RemoteCode List Inline Parameter",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType List",
+                "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
+                "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code this is being run on the remote computer was passed from an inline parameter\"}"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Run-RemoteCode Directory File",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType Directory",
+                "-Filter \"*\"",
+                "-ScriptBlockFilePath \"${workspaceFolder}/ScriptBlock.ps1\""
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Run-RemoteCode Directory Inline Parameter",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType Directory",
+                "-Filter \"*\"",
+                "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code this is being run on the remote computer was passed from an inline parameter\"}"
+            ],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
