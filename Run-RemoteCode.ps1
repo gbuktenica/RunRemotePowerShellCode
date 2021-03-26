@@ -23,6 +23,12 @@
 .PARAMETER ScriptBlockFilePath
     This string this the path to a file that contains the code that will be run on the remote computers.
 
+.PARAMETER SourcePath
+    This string is the source path to a directory that contains file that need to be copied to the remote computer.
+
+.PARAMETER DestinationPath
+    This string is the destination path to a directory on the remoter computer that will contain file that need to be copied to the remote computer.
+
 .PARAMETER Credential
     This PsCredential is the security context that will be used to run the remote code.
     If this is omitted the operator will be prompted for credential at first run.
@@ -78,6 +84,12 @@ param (
     [Parameter()]
     [string]
     $ScriptBlockFilePath,
+    [Parameter()]
+    [string]
+    $SourcePath,
+    [Parameter()]
+    [string]
+    $DestinationPath,
     [Parameter()]
     [pscredential]
     $Credential,
@@ -178,10 +190,12 @@ function Get-SavedCredentials {
     }
 }
 
+# Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
 if ($null -eq $Credential) {
     $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
 }
 
+# If an external file has been set then read that file into an object of type scriptblock.
 if ($ScriptBlockFilePath.length -gt 0) {
     Write-Verbose "Reading File: $ScriptBlockFilePath"
     [ScriptBlock]$ScriptBlock = [Scriptblock]::Create((Get-Content -Path $ScriptBlockFilePath -Raw -ErrorAction Stop))
@@ -231,8 +245,11 @@ if ($SourceType -eq "List") {
     $ComputerNames = (Get-ADComputer -Filter $Filter).DNSHostName
 }
 
-# Run Scriptblock on all computers
+if ($SourcePath.Length -gt 0 and $DestinationPath.Length -gt 0) {
+    
+}
 
+# Run the scriptblock on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
