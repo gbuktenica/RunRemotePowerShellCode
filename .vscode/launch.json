@@ -38,7 +38,7 @@
                 "-Verbose",
                 "-SourceType List",
                 "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
-                "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code this is being run on the remote computer was passed from an inline parameter\"}"
+                "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code that is being run on the remote computer was passed from an inline parameter\"}"
             ],
             "cwd": "${workspaceFolder}"
         },
@@ -64,7 +64,7 @@
                 "-Verbose",
                 "-SourceType Directory",
                 "-Filter \"*\"",
-                "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code this is being run on the remote computer was passed from an inline parameter\"}"
+                "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code that is being run on the remote computer was passed from an inline parameter\"}"
             ],
             "cwd": "${workspaceFolder}"
         }

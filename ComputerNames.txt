@@ -1,1 +1,3 @@
-auwanecma01.monadelphous.com.au
+Server1
+Laptop1
+Desktop1
