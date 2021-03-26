@@ -76,7 +76,7 @@
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v0.0.1 20210324
+    Release      : v0.02 20210326
 #>
 [CmdletBinding()]
 param (
