@@ -273,6 +273,7 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
+        $error.clear()
         Write-Output $ComputerName
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
             Write-Verbose "Starting file copy"
@@ -288,8 +289,11 @@ foreach ($ComputerName in $ComputerNames) {
         Write-Verbose "Starting Invoke-Command"
         try {
             Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
-        } catch {
+        } catch [System.Management.Automation.DriveNotFoundException] {
             Write-Warning "Computer $ComputerName connection failed"
+            Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+        } catch {
+            Write-Warning "Computer $ComputerName : $_.Exception.Message"
             Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
         }
     } else {
