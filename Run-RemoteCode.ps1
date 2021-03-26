@@ -20,6 +20,9 @@
 .PARAMETER ScriptBlock
     This ScriptBlock is the code that will be run on the remote computers.
 
+.PARAMETER ScriptBlockFilePath
+    This string this the path to a file that contains the code that will be run on the remote computers.
+
 .PARAMETER Credential
     This PsCredential is the security context that will be used to run the remote code.
     If this is omitted the operator will be prompted for credential at first run.
@@ -73,6 +76,9 @@ param (
     [ScriptBlock]
     $ScriptBlock,
     [Parameter()]
+    [string]
+    $ScriptBlockFilePath,
+    [Parameter()]
     [pscredential]
     $Credential,
     [Parameter()]
@@ -82,13 +88,6 @@ param (
     [switch]
     $AsJob
 )
-if ($null -eq $ScriptBlock) {
-    $ScriptBlock = {
-        # This Code is remote script block.
-        # Replace everything with in these braces "{}" with the code that is to be run against the remote computers.
-        Write-Output "Hello $env:COMPUTERNAME"
-    }
-}
 function Get-SavedCredentials {
     <#
     .SYNOPSIS
@@ -181,6 +180,11 @@ function Get-SavedCredentials {
 
 if ($null -eq $Credential) {
     $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
+}
+
+if ($ScriptBlockFilePath.length -gt 0) {
+    Write-Verbose "Reading File: $ScriptBlockFilePath"
+    [ScriptBlock]$ScriptBlock = [Scriptblock]::Create((Get-Content -Path $ScriptBlockFilePath -Raw -ErrorAction Stop))
 }
 
 # Generate the list of computer names.
