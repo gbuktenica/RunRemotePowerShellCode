@@ -27,13 +27,13 @@
 .PARAMETER SourcePath
     This string is the source path to a directory that contains file that need to be copied to the remote computers.
     This must be a whole UNC path accessible from the operator workstation.
-    Example \\FILESERVER\FOLDER
+    Example \\FileServer\LocalFolder
 
 .PARAMETER DestinationPath
     This string is the destination path to a directory on the remoter computers that will contain file that need to be copied to the remote computers.
     This must be a UNC path accessible from the operator workstation but excluding the remote computer hostname.
     Example C$\Windows\TEMP
-    Example LOCALSHARE\LOCALSUBFOLDER
+    Example LocalShare\LocalSubFolder
     The script will loop through and copy the files to the remote computers.
 
 .PARAMETER Credential
@@ -41,8 +41,12 @@
     If this is omitted the operator will be prompted for credential at first run.
 
 .PARAMETER Renew
-    THis switch prompts the user for a new password for an existing saved credential.
+    This switch prompts the user for a new password for an existing saved credential.
     To be used after a password change.
+
+.PARAMETER ConfigurationName
+    This string sets the PowerShell configuration that will be used to connect.
+    "Default" uses the clients default which is typically Windows PowerShell.
 
 .PARAMETER AsJob
     This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
@@ -108,6 +112,10 @@ param (
     [Parameter()]
     [switch]
     $Renew,
+    [Parameter()]
+    [ValidateSet('ClientDefault', 'Microsoft.PowerShell', 'Powershell.6', 'PowerShell.7')]
+    [string]
+    $ConfigurationName = 'ClientDefault',
     [Parameter()]
     [switch]
     $AsJob
@@ -270,6 +278,11 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential
 }
 
+if ($AsJob) {
+    # Remove any existing jobs from a previous run.
+    Get-Job | Remove-Job
+}
+
 # Run the remote jobs on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
@@ -283,32 +296,52 @@ foreach ($ComputerName in $ComputerNames) {
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
                 Remove-PSDrive -Name Destination -Force -ErrorAction Stop
             } catch {
-                 Write-Warning "Computer $ComputerName connection failed"
+                Write-Warning "Computer $ComputerName copy failed"
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
+                Break
             }
         }
         if ($ScriptBlock.length -gt 0) {
+            Write-Verbose "Starting New-PsSession"
+            if ($ConfigurationName -eq "Default") {
+                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
+            } else {
+                try {
+                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ConfigurationName $ConfigurationName -ErrorAction Stop
+                } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
+                    Write-Warning "ConfigurationName: $ConfigurationName not available. Falling back to default connection."
+                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
+                } catch {
+                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
+                    Break
+                }
+            }
             Write-Verbose "Starting Invoke-Command"
             try {
-                Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+                Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
             } catch [System.Management.Automation.DriveNotFoundException] {
                 Write-Warning "Computer $ComputerName connection failed"
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
             }
+            Remove-PsSession -Session $Session
         }
     } else {
         Write-Warning "Computer $ComputerName not online"
         Add-Content -Path (($PSCommandPath).split(".")[0] + ".NotOnline.txt") -Value $ComputerName
     }
 }
-try {
-    Remove-PSDrive -Name Source -ErrorAction Stop -Force
-    Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-} catch {}
-
 if ($AsJob) {
-    Get-Job | Receive-Job | Remove-Job
+    Write-Output "============================="
+    Write-Output "Waiting for jobs to complete"
+    Get-Job | Wait-Job
+    Write-Output "============================="
+    Write-Output "Jobs complete"
+    Get-Job | Receive-Job
 }
