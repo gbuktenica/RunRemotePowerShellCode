@@ -314,6 +314,7 @@ foreach ($ComputerName in $ComputerNames) {
                     $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                    # Update error log
                     Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
                     # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
                     Break
@@ -324,6 +325,7 @@ foreach ($ComputerName in $ComputerNames) {
                 Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
             } catch [System.Management.Automation.DriveNotFoundException] {
                 Write-Warning "Computer $ComputerName connection failed"
+                # Update error log
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
@@ -334,6 +336,7 @@ foreach ($ComputerName in $ComputerNames) {
         }
     } else {
         Write-Warning "Computer $ComputerName not online"
+        # Update connection log
         Add-Content -Path (($PSCommandPath).split(".")[0] + ".NotOnline.txt") -Value $ComputerName
     }
 }
