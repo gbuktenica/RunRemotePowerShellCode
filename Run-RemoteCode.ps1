@@ -304,7 +304,7 @@ foreach ($ComputerName in $ComputerNames) {
         }
         if ($ScriptBlock.length -gt 0) {
             Write-Verbose "Starting New-PsSession"
-            if ($ConfigurationName -eq "Default") {
+            if ($ConfigurationName -eq "ClientDefault") {
                 $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
             } else {
                 try {
