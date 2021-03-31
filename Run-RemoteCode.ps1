@@ -226,6 +226,8 @@ if ($SourceType -eq "List") {
     # List SourceType selected, so read the text file.
     if ($ListPath.length -eq 0) {
         Write-Verbose "`$SourceType is list but `$ListPath is null so prompt operator for file path."
+        # Check that GUI dependencies are installed.
+        # If dependencies are missing and can be installed then do so.
         if (-not (Get-Module -Name "FileSystemForms")) {
             if (((Get-PackageProvider -Name nuget -ErrorAction SilentlyContinue).version) -lt [version]"2.8.5.201") {
                 Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
@@ -242,7 +244,8 @@ if ($SourceType -eq "List") {
     }
     $ComputerNames = Get-Content $ListPath
 } elseif ($SourceType -eq "Directory") {
-    # Check for installed dependencies and install if missing and possible to install.
+    # Check that Active Directory dependencies are installed.
+    # If dependencies are missing and can be installed then do so.
     if (-not(Get-Module -Name "ActiveDirectory")) {
         if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
             Write-Verbose "Workstation Operating System detected"
