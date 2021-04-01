@@ -44,6 +44,9 @@
     This switch prompts the user for a new password for an existing saved credential.
     To be used after a password change.
 
+.PARAMETER NoSave
+    This switch prevents credentials being saved and will prompt the operator every time for privileged credentials.
+
 .PARAMETER ConfigurationName
     This string sets the PowerShell configuration that will be used to connect.
     "Default" uses the clients default which is typically Windows PowerShell.
@@ -80,7 +83,7 @@
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v0.0.2 20210326
+    Release      : v1.0.0 20210401
 #>
 [CmdletBinding()]
 param (
@@ -112,6 +115,9 @@ param (
     [Parameter()]
     [switch]
     $Renew,
+    [Parameter()]
+    [switch]
+    $NoSave,
     [Parameter()]
     [ValidateSet('ClientDefault', 'Microsoft.PowerShell', 'Powershell.6', 'PowerShell.7')]
     [string]
@@ -212,7 +218,12 @@ function Get-SavedCredentials {
 
 # Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
 if ($null -eq $Credential) {
-    $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
+    if ($NoSave) {
+        $Credential = Get-Credential
+    } else {
+        $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
+    }
+
 }
 
 # If an external file has been set then read that file into an object of type scriptblock.
