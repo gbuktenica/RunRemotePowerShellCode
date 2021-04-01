@@ -27,13 +27,13 @@
 .PARAMETER SourcePath
     This string is the source path to a directory that contains file that need to be copied to the remote computers.
     This must be a whole UNC path accessible from the operator workstation.
-    Example \\FILESERVER\FOLDER
+    Example \\FileServer\LocalFolder
 
 .PARAMETER DestinationPath
     This string is the destination path to a directory on the remoter computers that will contain file that need to be copied to the remote computers.
     This must be a UNC path accessible from the operator workstation but excluding the remote computer hostname.
     Example C$\Windows\TEMP
-    Example LOCALSHARE\LOCALSUBFOLDER
+    Example LocalShare\LocalSubFolder
     The script will loop through and copy the files to the remote computers.
 
 .PARAMETER Credential
@@ -41,8 +41,15 @@
     If this is omitted the operator will be prompted for credential at first run.
 
 .PARAMETER Renew
-    THis switch prompts the user for a new password for an existing saved credential.
+    This switch prompts the user for a new password for an existing saved credential.
     To be used after a password change.
+
+.PARAMETER NoSave
+    This switch prevents credentials being saved and will prompt the operator every time for privileged credentials.
+
+.PARAMETER ConfigurationName
+    This string sets the PowerShell configuration that will be used to connect.
+    "Default" uses the clients default which is typically Windows PowerShell.
 
 .PARAMETER AsJob
     This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
@@ -76,7 +83,7 @@
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v0.0.2 20210326
+    Release      : v1.0.0 20210401
 #>
 [CmdletBinding()]
 param (
@@ -108,6 +115,13 @@ param (
     [Parameter()]
     [switch]
     $Renew,
+    [Parameter()]
+    [switch]
+    $NoSave,
+    [Parameter()]
+    [ValidateSet('ClientDefault', 'Microsoft.PowerShell', 'Powershell.6', 'PowerShell.7')]
+    [string]
+    $ConfigurationName = 'ClientDefault',
     [Parameter()]
     [switch]
     $AsJob
@@ -204,7 +218,12 @@ function Get-SavedCredentials {
 
 # Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
 if ($null -eq $Credential) {
-    $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
+    if ($NoSave) {
+        $Credential = Get-Credential
+    } else {
+        $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
+    }
+
 }
 
 # If an external file has been set then read that file into an object of type scriptblock.
@@ -218,6 +237,8 @@ if ($SourceType -eq "List") {
     # List SourceType selected, so read the text file.
     if ($ListPath.length -eq 0) {
         Write-Verbose "`$SourceType is list but `$ListPath is null so prompt operator for file path."
+        # Check that GUI dependencies are installed.
+        # If dependencies are missing and can be installed then do so.
         if (-not (Get-Module -Name "FileSystemForms")) {
             if (((Get-PackageProvider -Name nuget -ErrorAction SilentlyContinue).version) -lt [version]"2.8.5.201") {
                 Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
@@ -234,15 +255,31 @@ if ($SourceType -eq "List") {
     }
     $ComputerNames = Get-Content $ListPath
 } elseif ($SourceType -eq "Directory") {
-    # Check for installed dependencies and install if missing and possible to install.
+    # Check that Active Directory dependencies are installed.
+    # If dependencies are missing and can be installed then do so.
     if (-not(Get-Module -Name "ActiveDirectory")) {
         if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
             Write-Verbose "Workstation Operating System detected"
             if ([Environment]::OSVersion.Version -ge [version]"10.0.18090") {
                 Write-Verbose "Window 10 build greater than 1809 detected"
-                # TODO
-                # The following command requires elevation
-                Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop
+                function Test-Admin {
+                    $currentUser = New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())
+                    $currentUser.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+                }
+                if (-not(Test-Admin)) {
+                    if ($PSVersionTable.PSEdition -eq "Core") {
+                        Write-Verbose "Installing RSAT using Elevated PowerShell Core"
+                        Start-Process -Wait -Verb RunAs -FilePath pwsh.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
+
+                    } else {
+                        Write-Verbose "Installing RSAT using Elevated Windows PowerShell"
+                        Start-Process -Wait -Verb RunAs -FilePath powershell.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
+                    }
+                } else {
+                    Write-Verbose "Installing RSAT"
+                    Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop
+                }
+
             } else {
                 Write-Error "`nActive Directory Module not found. `nInstall RSAT tools to enable: `nhttps://www.microsoft.com/en-us/download/details.aspx?id=45520" -ErrorAction Stop
                 exit 1
@@ -270,6 +307,11 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential
 }
 
+if ($AsJob) {
+    # Remove any existing jobs from a previous run.
+    Get-Job | Remove-Job
+}
+
 # Run the remote jobs on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
@@ -283,32 +325,55 @@ foreach ($ComputerName in $ComputerNames) {
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
                 Remove-PSDrive -Name Destination -Force -ErrorAction Stop
             } catch {
-                 Write-Warning "Computer $ComputerName connection failed"
+                Write-Warning "Computer $ComputerName copy failed"
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
+                Break
             }
         }
         if ($ScriptBlock.length -gt 0) {
+            Write-Verbose "Starting New-PsSession"
+            if ($ConfigurationName -eq "ClientDefault") {
+                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
+            } else {
+                try {
+                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ConfigurationName $ConfigurationName -ErrorAction Stop
+                } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
+                    Write-Warning "ConfigurationName: $ConfigurationName not available. Falling back to default connection."
+                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
+                } catch {
+                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                    # Update error log
+                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
+                    Break
+                }
+            }
             Write-Verbose "Starting Invoke-Command"
             try {
-                Invoke-Command -ComputerName $ComputerName -Credential $Credential -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+                Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
             } catch [System.Management.Automation.DriveNotFoundException] {
                 Write-Warning "Computer $ComputerName connection failed"
+                # Update error log
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
             }
+            Remove-PsSession -Session $Session
         }
     } else {
         Write-Warning "Computer $ComputerName not online"
+        # Update connection log
         Add-Content -Path (($PSCommandPath).split(".")[0] + ".NotOnline.txt") -Value $ComputerName
     }
 }
-try {
-    Remove-PSDrive -Name Source -ErrorAction Stop -Force
-    Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-} catch {}
-
 if ($AsJob) {
-    Get-Job | Receive-Job | Remove-Job
+    Write-Output "============================="
+    Write-Output "Waiting for jobs to complete"
+    Get-Job | Wait-Job
+    Write-Output "============================="
+    Write-Output "Jobs complete"
+    Get-Job | Receive-Job
 }
