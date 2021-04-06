@@ -300,10 +300,12 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     Write-Verbose "SourcePath: $SourcePath"
     Write-Verbose "DestinationPath: $DestinationPath"
     # Clean up old PSDrives if not cleaned up in previous execution
-    try {
+    if (Test-Path -Path "Source:\") {
         Remove-PSDrive -Name Source -ErrorAction Stop -Force
+    }
+    if (Test-Path -Path "Destination:\") {
         Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-    } catch {}
+    }
     New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential
 }
 
@@ -323,7 +325,9 @@ foreach ($ComputerName in $ComputerNames) {
             try {
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
-                Remove-PSDrive -Name Destination -Force -ErrorAction Stop
+                if (Test-Path -Path "Destination:\") {
+                    Remove-PSDrive -Name Destination -ErrorAction Stop -Force
+                }
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
