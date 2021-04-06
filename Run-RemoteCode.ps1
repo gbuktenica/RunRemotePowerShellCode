@@ -75,15 +75,24 @@
 .EXAMPLE
     .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
     Will copy the contents of \\FileServer\Files to C$\Windows\temp on all computer objects that are contained in the default Active Directory.
+    No other script execution will take place.
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
-.LINK
+.EXAMPLE
+    .\Run-RemoteCode.ps1 -SourceType List -ListPath .\computername.txt`
+     -ScriptBlock {Start-Process -FilePath C:\Windows\Temp\Path\Example.exe -ArgumentList "/Q"}`
+     -SourcePath \\FileServer\Path -DestinationPath C$\windows\Temp
+    Will copy the folder \\FileServer\Files to C:\Windows\Temp to all of the remote computers.
+    The Example.exe windows binary will be executed on the remote computer with the /Q switch
+    If this is the first run of the script the operator will be prompted to enter privileged credentials.
+
+    .LINK
     https://github.com/gbuktenica/RunRemotePowerShellCode
 
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v1.0.0 20210401
+    Release      : v1.0.1 20210406
 #>
 [CmdletBinding()]
 param (
