@@ -300,7 +300,11 @@ if ($SourceType -eq "List") {
         }
     }
     Import-Module -Name "ActiveDirectory" -ErrorAction Stop
-    $ComputerNames = (Get-ADComputer -Filter $Filter).DNSHostName
+    $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
+    if ($WhereObject) {
+        $ComputerNames = $ComputerNames | Where-Object $WhereObject #{ $_.operatingsystem -match "*Windows 7*|*Windows 8*|*Windows 10*" }
+    }
+    $ComputerNames = $ComputerNames.DNSHostName
 }
 
 # If a file copy is being done map a drive with credentials
