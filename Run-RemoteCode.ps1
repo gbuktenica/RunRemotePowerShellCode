@@ -318,7 +318,10 @@ if ($SourceType -eq "List") {
             Install-WindowsFeature -Name RSAT-AD-PowerShell
         }
     }
-    Import-Module -Name "ActiveDirectory" -ErrorAction Stop
+    $SavedPreference = $VerbosePreference
+    $VerbosePreference = "SilentlyContinue"
+    Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
+    $VerbosePreference = $SavedPreference
     $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
     if ($FilterScript) {
         Write-Verbose "Running FilterScript"
