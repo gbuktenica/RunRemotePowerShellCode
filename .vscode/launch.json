@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run-RemoteCode List File",
+            "name": "Run List File",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -15,7 +15,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode List File AsJob",
+            "name": "Run List File AsJob",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -29,7 +29,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode List File PowerShell 7",
+            "name": "Run List File PowerShell 7",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -43,7 +43,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode List File Copy",
+            "name": "Run List File Copy",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -58,7 +58,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode List Inline Parameter",
+            "name": "Run List Inline Parameter",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -71,7 +71,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode Directory File",
+            "name": "Run Directory File",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -84,7 +84,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode Directory Inline Parameter",
+            "name": "Run Directory Inline Parameter",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
