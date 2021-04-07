@@ -315,7 +315,7 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     if (Test-Path -Path "Destination:\") {
         Remove-PSDrive -Name Destination -ErrorAction Stop -Force
     }
-    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential
+    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
 }
 
 if ($AsJob) {
@@ -326,25 +326,27 @@ if ($AsJob) {
 # Run the remote jobs on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
+    $StepPass = $true
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
         Write-Output $ComputerName
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
             Write-Verbose "Starting file copy"
             try {
-                New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop
-                Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
+                New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
+                Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
                 if (Test-Path -Path "Destination:\") {
                     Remove-PSDrive -Name Destination -ErrorAction Stop -Force
                 }
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
-                # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
-                Break
+                Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
+                $StepPass = $false
+                $debugActionPreference
+                $Error[0].Exception.GetType().FullName
             }
         }
-        if ($ScriptBlock.length -gt 0) {
+        if ($ScriptBlock.length -gt 0 -and $StepPass ) {
             Write-Verbose "Starting New-PsSession"
             if ($ConfigurationName -eq "ClientDefault") {
                 $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
@@ -359,20 +361,22 @@ foreach ($ComputerName in $ComputerNames) {
                     # Update error log
                     Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
                     # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
-                    Break
+                    $StepPass = $false
                 }
             }
-            Write-Verbose "Starting Invoke-Command"
-            try {
-                Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
-            } catch [System.Management.Automation.DriveNotFoundException] {
-                Write-Warning "Computer $ComputerName connection failed"
-                # Update error log
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
-            } catch {
-                Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
-                # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
+            If ($StepPass) {
+                Write-Verbose "Starting Invoke-Command"
+                try {
+                    Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+                } catch [System.Management.Automation.DriveNotFoundException] {
+                    Write-Warning "Computer $ComputerName connection failed"
+                    # Update error log
+                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                } catch {
+                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
+                }
             }
             Remove-PsSession -Session $Session
         }

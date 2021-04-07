@@ -56,6 +56,7 @@ $RECYCLE.BIN/
 # Ignore error logs
 *NotOnline.txt
 *Error.txt
+*CopyFailed.txt
 
 # Ignore Working directory
 working/*
