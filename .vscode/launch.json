@@ -92,6 +92,7 @@
                 "-Verbose",
                 "-SourceType Directory",
                 "-Filter \"*\"",
+                "-FilterScript {$_.name -like \"Computer*\"}",
                 "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code that is being run on the remote computer was passed from an inline parameter\"}"
             ],
             "cwd": "${workspaceFolder}"

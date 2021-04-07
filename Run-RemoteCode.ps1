@@ -9,31 +9,45 @@
 
 .PARAMETER SourceType
     This string determines the source of computer names that the script will be actioned against.
+    Example: -SourceType List
+    Example: -SourceType Directory
 
 .PARAMETER ListPath
     This string is the path to the plain text list of computer names that will be targeted.
     The text file should have one computer name per line.
+    Example -ListPath ".\ComputerNames.txt"
 
 .PARAMETER Filter
     This string is the filter used to find computer objects in Active Directory.
     The text file should have one computer name per line.
+    Example: -Filter 'Name -like "Computer01*"'
+
+.PARAMETER SearchBase
+    This string is the Active Directory Organisational Unit search filter.
+    Example: -SearchBase "CN=Computers,DC=Company,DC=com"
+
+.PARAMETER FilterScript
+    This ScriptBlock is the FilterScript for the Active Directory search.
+    Example: -FilterScript "$_.Name -like "Computer01*"
 
 .PARAMETER ScriptBlock
     This ScriptBlock is the code that will be run on the remote computers.
+    Example: -ScriptBlock {Write-Output "Hello $env:COMPUTERNAME"}
 
 .PARAMETER ScriptBlockFilePath
     This string this the path to a file that contains the code that will be run on the remote computers.
+    Example: -ScriptBlockFilePath ".\ScriptBlock.ps1"
 
 .PARAMETER SourcePath
     This string is the source path to a directory that contains file that need to be copied to the remote computers.
     This must be a whole UNC path accessible from the operator workstation.
-    Example \\FileServer\LocalFolder
+    Example: -SourcePath \\FileServer\LocalFolder
 
 .PARAMETER DestinationPath
     This string is the destination path to a directory on the remoter computers that will contain file that need to be copied to the remote computers.
     This must be a UNC path accessible from the operator workstation but excluding the remote computer hostname.
-    Example C$\Windows\TEMP
-    Example LocalShare\LocalSubFolder
+    Example: -DestinationPath "C$\Windows\TEMP"
+    Example: -DestinationPath "LocalShare\LocalSubFolder"
     The script will loop through and copy the files to the remote computers.
 
 .PARAMETER Credential
@@ -106,6 +120,12 @@ param (
     [Parameter()]
     [string]
     $Filter,
+    [Parameter()]
+    [string]
+    $SearchBase,
+    [Parameter()]
+    [ScriptBlock]
+    $FilterScript,
     [Parameter()]
     [ScriptBlock]
     $ScriptBlock,
@@ -232,7 +252,6 @@ if ($null -eq $Credential) {
     } else {
         $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
     }
-
 }
 
 # If an external file has been set then read that file into an object of type scriptblock.
@@ -301,8 +320,9 @@ if ($SourceType -eq "List") {
     }
     Import-Module -Name "ActiveDirectory" -ErrorAction Stop
     $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
-    if ($WhereObject) {
-        $ComputerNames = $ComputerNames | Where-Object $WhereObject #{ $_.operatingsystem -match "*Windows 7*|*Windows 8*|*Windows 10*" }
+    if ($FilterScript) {
+        Write-Verbose "Running FilterScript"
+        $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
     }
     $ComputerNames = $ComputerNames.DNSHostName
 }
