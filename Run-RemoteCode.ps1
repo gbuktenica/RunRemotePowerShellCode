@@ -21,14 +21,16 @@
     This string is the filter used to find computer objects in Active Directory.
     The text file should have one computer name per line.
     Example: -Filter 'Name -like "Computer01*"'
+    Example: -Filter 'OperatingSystem -like "*server*"'
 
 .PARAMETER SearchBase
     This string is the Active Directory Organisational Unit search filter.
     Example: -SearchBase "CN=Computers,DC=Company,DC=com"
+    Example: -SearchBase "OU=Servers,OU=Region,DC=Company,DC=com"
 
 .PARAMETER FilterScript
     This ScriptBlock is the FilterScript for the Active Directory search.
-    Example: -FilterScript "$_.Name -like "Computer01*"
+    Example: -FilterScript {$_.PasswordLastSet -ge ((Get-Date).AddDays(-90))}
 
 .PARAMETER ScriptBlock
     This ScriptBlock is the code that will be run on the remote computers.
@@ -69,12 +71,14 @@
     This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType List -ScriptBlockFilePath ScriptBlock.ps1
+    .\Run-RemoteCode.ps1 -SourceType List -ScriptBlockFilePath .\ScriptBlock.ps1
+
     Will run the contents of ScriptBlock.ps1 against a list of computers names that are contained in a plain text file.
     As the ListPath parameter is not used the operator will be prompted for the path of the text file.
 
 .EXAMPLE
     .\Run-RemoteCode.ps1 -SourceType List -ListPath c:\scripts\computers.txt -ScriptBlock {Write-Output "Hello World"} -AsJob
+
     Will run the inline Script Block:
         Write-Output "Hello World"
     against a list of computers names that are contained in the plain text file "c:\scripts\computers.txt"
@@ -82,25 +86,35 @@
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -ScriptBlock {Write-Output "Hello World"}
-    Will run the inline Script Block against all computer objects that are contained in the default Active Directory.
+    .\Run-RemoteCode.ps1 -SourceType Directory -Filter 'OperatingSystem -like "*server*"' -ScriptBlock {Write-Output "Hello World"}
+
+    Will run the inline Script Block against all computer objects that are servers and contained in the default Active Directory.
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
+    .\Run-RemoteCode.ps1 -SourceType Directory -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
+
     Will copy the contents of \\FileServer\Files to C$\Windows\temp on all computer objects that are contained in the default Active Directory.
     No other script execution will take place.
+    If this is the first run of the script the operator will be prompted to enter privileged credentials.
+
+.EXAMPLE
+    .\Run-RemoteCode.ps1 -SourceType Directory -SearchBase "OU=Servers,OU=Region,DC=Company,DC=com"`
+     -FilterScript {$_.PasswordLastSet -ge ((Get-Date).AddDays(-90))} -ScriptBlock {Write-Output "Hello World"}
+
+    Will run the inline Script Block against all computer objects that are contained in the Organisational Unit "Servers" that have had a password reset in the last 90 days.
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .EXAMPLE
     .\Run-RemoteCode.ps1 -SourceType List -ListPath .\computername.txt`
      -ScriptBlock {Start-Process -FilePath C:\Windows\Temp\Path\Example.exe -ArgumentList "/Q"}`
      -SourcePath \\FileServer\Path -DestinationPath C$\windows\Temp
+
     Will copy the folder \\FileServer\Files to C:\Windows\Temp to all of the remote computers.
     The Example.exe windows binary will be executed on the remote computer with the /Q switch
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
-    .LINK
+.LINK
     https://github.com/gbuktenica/RunRemotePowerShellCode
 
 .NOTES
