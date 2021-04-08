@@ -365,10 +365,15 @@ if ($AsJob) {
     # Remove any existing jobs from a previous run.
     Get-Job | Remove-Job
 }
-
+$ProgressCount = 0
+$ProgressTotal = ($ComputerNames).count
+Write-Progress -Id 1 -Activity "Preparing for first run" -Status "0 percent complete" -PercentComplete 0
 # Run the remote jobs on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
+    $ProgressCount ++
+    $ProgressComplete = [decimal]::round($ProgressCount / $ProgressTotal * 100)
+    Write-Progress -Id 1 -Activity $ComputerName -Status "$ProgressComplete percent complete" -PercentComplete $ProgressComplete
     $StepPass = $true
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
@@ -429,6 +434,9 @@ foreach ($ComputerName in $ComputerNames) {
         Add-Content -Path (($PSCommandPath).split(".")[0] + ".NotOnline.txt") -Value $ComputerName
     }
 }
+
+Write-Progress -Id 1 -Activity "Finished" -Status "100 percent complete" -PercentComplete 100
+
 if ($AsJob) {
     Write-Output "============================="
     Write-Output "Waiting for jobs to complete"
