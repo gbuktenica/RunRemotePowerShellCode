@@ -367,17 +367,18 @@ if ($AsJob) {
 }
 $ProgressCount = 0
 $ProgressTotal = ($ComputerNames).count
-Write-Progress -Id 1 -Activity "Preparing for first run" -Status "0 percent complete" -PercentComplete 0
+#Write-Progress -Id 1 -Activity "Preparing for first run" -Status "0 percent complete" -PercentComplete 0
 # Run the remote jobs on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
     $ProgressCount ++
-    $ProgressComplete = [decimal]::round($ProgressCount / $ProgressTotal * 100)
-    Write-Progress -Id 1 -Activity $ComputerName -Status "$ProgressComplete percent complete" -PercentComplete $ProgressComplete
+    #$ProgressComplete = [decimal]::round($ProgressCount / $ProgressTotal * 100)
+    #Write-Progress -Id 1 -Activity $ComputerName -Status "$ProgressComplete percent complete" -PercentComplete $ProgressComplete
+
     $StepPass = $true
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
-        Write-Output $ComputerName
+        Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
             Write-Verbose "Starting file copy"
             try {
@@ -397,7 +398,15 @@ foreach ($ComputerName in $ComputerNames) {
         if ($ScriptBlock.length -gt 0 -and $StepPass ) {
             Write-Verbose "Starting New-PsSession"
             if ($ConfigurationName -eq "ClientDefault") {
-                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
+                try {
+                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
+                } catch {
+                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                    # Update error log
+                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
+                    $StepPass = $false
+                }
             } else {
                 try {
                     $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ConfigurationName $ConfigurationName -ErrorAction Stop
