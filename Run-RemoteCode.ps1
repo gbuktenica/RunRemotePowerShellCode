@@ -343,6 +343,7 @@ if ($SourceType -eq "List") {
         $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
     }
     $ComputerNames = $ComputerNames.DNSHostName
+    Write-Output "Finished Reading Computer Objects from Active Directory"
 }
 
 # If a file copy is being done map a drive with credentials
