@@ -426,7 +426,9 @@ foreach ($ComputerName in $ComputerNames) {
                     # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
                 }
             }
-            Remove-PsSession -Session $Session
+            if ($null -ne $Session) {
+                Remove-PsSession -Session $Session
+            }
         }
     } else {
         Write-Warning "Computer $ComputerName not online"
