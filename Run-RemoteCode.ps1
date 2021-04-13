@@ -52,6 +52,10 @@
     Example: -DestinationPath "LocalShare\LocalSubFolder"
     The script will loop through and copy the files to the remote computers.
 
+.PARAMETER Keep
+    The switch will not delete the local folder that was copied to the remote computer.
+    By default this script will remove the local folder after the script block has completed execution.
+
 .PARAMETER Credential
     This PsCredential is the security context that will be used to run the remote code.
     If this is omitted the operator will be prompted for credential at first run.
@@ -152,6 +156,9 @@ param (
     [Parameter()]
     [string]
     $DestinationPath,
+    [Parameter()]
+    [switch]
+    $Keep,
     [Parameter()]
     [pscredential]
     $Credential,
@@ -433,6 +440,14 @@ foreach ($ComputerName in $ComputerNames) {
             }
             if ($null -ne $Session) {
                 Remove-PsSession -Session $Session
+            }
+            if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0 -and -not $Keep) {
+                Write-Verbose "Removing local directory"
+                $RemoveFolder = $SourcePath + (Split-Path $SourcePath -leaf)
+                Remove-Item $RemoveFolder
+            }
+            if (Test-Path -Path "Destination:\") {
+                Remove-PSDrive -Name Destination -ErrorAction Stop -Force
             }
         }
     } else {
