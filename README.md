@@ -50,15 +50,15 @@ Each remote computer will be executed as a parallel job.
 If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 ```powershell
-Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -ScriptBlock {Write-Output "Hello World"}
+Run-RemoteCode.ps1 -SourceType Directory -Filter 'OperatingSystem -like "*server*"' -ScriptBlock {Write-Output "Hello World"}
 ```
 
-This will run the inline Script Block against all computer objects that are contained in the default Active Directory.
+This will run the inline Script Block against all computer objects that are contained in the default Active Directory that have a server operating system.
 If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 ```powershell
-.\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
+.\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -FilterScript {$_.PasswordLastSet -ge ((Get-Date).AddDays(-90))} -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
 ```
 
-This will copy the contents of \\FileServer\Files to C$\Windows\temp on all computer objects that are contained in the default Active Directory.
+This will copy the contents of \\FileServer\Files to C$\Windows\temp on all computer objects that are contained in the default Active Directory that have been on the network in the last 90 days.
 If this is the first run of the script the operator will be prompted to enter privileged credentials.
