@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run-RemoteCode List File",
+            "name": "List File",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -15,7 +15,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode List File AsJob",
+            "name": "List File AsJob",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -29,7 +29,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode List File PowerShell 7",
+            "name": "List File PowerShell 7",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -43,7 +43,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode List File Copy",
+            "name": "List File Copy",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -58,7 +58,7 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode List Inline Parameter",
+            "name": "List Inline Parameter",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
@@ -71,27 +71,40 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode Directory File",
+            "name": "Directory File",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
             "args": [
                 "-Verbose",
                 "-SourceType Directory",
-                "-Filter \"*\"",
                 "-ScriptBlockFilePath \"${workspaceFolder}/ScriptBlock.ps1\""
             ],
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run-RemoteCode Directory Inline Parameter",
+            "name": "Directory Inline Parameter",
             "type": "PowerShell",
             "request": "launch",
             "script": "${workspaceFolder}/Run-RemoteCode.ps1",
             "args": [
                 "-Verbose",
                 "-SourceType Directory",
-                "-Filter \"*\"",
+                "-Filter 'name -like \"Computer*\"'",
+                "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code that is being run on the remote computer was passed from an inline parameter\"}"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Directory Servers 90 Days Inline Parameter",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Run-RemoteCode.ps1",
+            "args": [
+                "-Verbose",
+                "-SourceType Directory",
+                "-Filter 'OperatingSystem -like \"*server*\"'",
+                "-FilterScript {$_.PasswordLastSet -ge ((Get-Date).AddDays(-90))}",
                 "-ScriptBlock {Write-Output \"Hello $env:COMPUTERNAME `nThis example code that is being run on the remote computer was passed from an inline parameter\"}"
             ],
             "cwd": "${workspaceFolder}"

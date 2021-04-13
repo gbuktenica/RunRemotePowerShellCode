@@ -9,31 +9,47 @@
 
 .PARAMETER SourceType
     This string determines the source of computer names that the script will be actioned against.
+    Example: -SourceType List
+    Example: -SourceType Directory
 
 .PARAMETER ListPath
     This string is the path to the plain text list of computer names that will be targeted.
     The text file should have one computer name per line.
+    Example -ListPath ".\ComputerNames.txt"
 
 .PARAMETER Filter
     This string is the filter used to find computer objects in Active Directory.
     The text file should have one computer name per line.
+    Example: -Filter 'Name -like "Computer01*"'
+    Example: -Filter 'OperatingSystem -like "*server*"'
+
+.PARAMETER SearchBase
+    This string is the Active Directory Organisational Unit search filter.
+    Example: -SearchBase "CN=Computers,DC=Company,DC=com"
+    Example: -SearchBase "OU=Servers,OU=Region,DC=Company,DC=com"
+
+.PARAMETER FilterScript
+    This ScriptBlock is the FilterScript for the Active Directory search.
+    Example: -FilterScript {$_.PasswordLastSet -ge ((Get-Date).AddDays(-90))}
 
 .PARAMETER ScriptBlock
     This ScriptBlock is the code that will be run on the remote computers.
+    Example: -ScriptBlock {Write-Output "Hello $env:COMPUTERNAME"}
 
 .PARAMETER ScriptBlockFilePath
     This string this the path to a file that contains the code that will be run on the remote computers.
+    Example: -ScriptBlockFilePath ".\ScriptBlock.ps1"
 
 .PARAMETER SourcePath
     This string is the source path to a directory that contains file that need to be copied to the remote computers.
     This must be a whole UNC path accessible from the operator workstation.
-    Example \\FileServer\LocalFolder
+    Example: -SourcePath \\FileServer\LocalFolder
 
 .PARAMETER DestinationPath
     This string is the destination path to a directory on the remoter computers that will contain file that need to be copied to the remote computers.
     This must be a UNC path accessible from the operator workstation but excluding the remote computer hostname.
-    Example C$\Windows\TEMP
-    Example LocalShare\LocalSubFolder
+    Example: -DestinationPath "C$\Windows\TEMP"
+    Example: -DestinationPath "LocalShare\LocalSubFolder"
     The script will loop through and copy the files to the remote computers.
 
 .PARAMETER Credential
@@ -55,12 +71,14 @@
     This switch forces the remote script block to be actioned as a powershell job as a parallel thread.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType List -ScriptBlockFilePath ScriptBlock.ps1
+    .\Run-RemoteCode.ps1 -SourceType List -ScriptBlockFilePath .\ScriptBlock.ps1
+
     Will run the contents of ScriptBlock.ps1 against a list of computers names that are contained in a plain text file.
     As the ListPath parameter is not used the operator will be prompted for the path of the text file.
 
 .EXAMPLE
     .\Run-RemoteCode.ps1 -SourceType List -ListPath c:\scripts\computers.txt -ScriptBlock {Write-Output "Hello World"} -AsJob
+
     Will run the inline Script Block:
         Write-Output "Hello World"
     against a list of computers names that are contained in the plain text file "c:\scripts\computers.txt"
@@ -68,13 +86,32 @@
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -ScriptBlock {Write-Output "Hello World"}
-    Will run the inline Script Block against all computer objects that are contained in the default Active Directory.
+    .\Run-RemoteCode.ps1 -SourceType Directory -Filter 'OperatingSystem -like "*server*"' -ScriptBlock {Write-Output "Hello World"}
+
+    Will run the inline Script Block against all computer objects that are servers and contained in the default Active Directory.
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .EXAMPLE
-    .\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
+    .\Run-RemoteCode.ps1 -SourceType Directory -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
+
     Will copy the contents of \\FileServer\Files to C$\Windows\temp on all computer objects that are contained in the default Active Directory.
+    No other script execution will take place.
+    If this is the first run of the script the operator will be prompted to enter privileged credentials.
+
+.EXAMPLE
+    .\Run-RemoteCode.ps1 -SourceType Directory -SearchBase "OU=Servers,OU=Region,DC=Company,DC=com"`
+     -FilterScript {$_.PasswordLastSet -ge ((Get-Date).AddDays(-90))} -ScriptBlock {Write-Output "Hello World"}
+
+    Will run the inline Script Block against all computer objects that are contained in the Organisational Unit "Servers" that have had a password reset in the last 90 days.
+    If this is the first run of the script the operator will be prompted to enter privileged credentials.
+
+.EXAMPLE
+    .\Run-RemoteCode.ps1 -SourceType List -ListPath .\computername.txt`
+     -ScriptBlock {Start-Process -FilePath C:\Windows\Temp\Path\Example.exe -ArgumentList "/Q"}`
+     -SourcePath \\FileServer\Path -DestinationPath C$\windows\Temp
+
+    Will copy the folder \\FileServer\Files to C:\Windows\Temp to all of the remote computers.
+    The Example.exe windows binary will be executed on the remote computer with the /Q switch
     If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 .LINK
@@ -83,7 +120,7 @@
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v1.0.0 20210401
+    Release      : v1.0.1 20210406
 #>
 [CmdletBinding()]
 param (
@@ -97,6 +134,12 @@ param (
     [Parameter()]
     [string]
     $Filter,
+    [Parameter()]
+    [string]
+    $SearchBase,
+    [Parameter()]
+    [ScriptBlock]
+    $FilterScript,
     [Parameter()]
     [ScriptBlock]
     $ScriptBlock,
@@ -223,7 +266,6 @@ if ($null -eq $Credential) {
     } else {
         $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
     }
-
 }
 
 # If an external file has been set then read that file into an object of type scriptblock.
@@ -290,8 +332,18 @@ if ($SourceType -eq "List") {
             Install-WindowsFeature -Name RSAT-AD-PowerShell
         }
     }
-    Import-Module -Name "ActiveDirectory" -ErrorAction Stop
-    $ComputerNames = (Get-ADComputer -Filter $Filter).DNSHostName
+    $SavedPreference = $VerbosePreference
+    $VerbosePreference = "SilentlyContinue"
+    Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
+    $VerbosePreference = $SavedPreference
+    Write-Output "Reading Computer Objects from Active Directory"
+    $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
+    if ($FilterScript) {
+        Write-Verbose "Running FilterScript"
+        $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
+    }
+    $ComputerNames = $ComputerNames.DNSHostName
+    Write-Output "Finished Reading Computer Objects from Active Directory"
 }
 
 # If a file copy is being done map a drive with credentials
@@ -300,41 +352,57 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     Write-Verbose "SourcePath: $SourcePath"
     Write-Verbose "DestinationPath: $DestinationPath"
     # Clean up old PSDrives if not cleaned up in previous execution
-    try {
+    if (Test-Path -Path "Source:\") {
         Remove-PSDrive -Name Source -ErrorAction Stop -Force
+    }
+    if (Test-Path -Path "Destination:\") {
         Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-    } catch {}
-    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential
+    }
+    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
 }
 
 if ($AsJob) {
     # Remove any existing jobs from a previous run.
     Get-Job | Remove-Job
 }
-
+$ProgressCount = 0
+$ProgressTotal = ($ComputerNames).count
 # Run the remote jobs on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
+    $ProgressCount ++
+    $StepPass = $true
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
-        Write-Output $ComputerName
+        Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
             Write-Verbose "Starting file copy"
             try {
-                New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop
-                Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse
-                Remove-PSDrive -Name Destination -Force -ErrorAction Stop
+                New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
+                Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
+                if (Test-Path -Path "Destination:\") {
+                    Remove-PSDrive -Name Destination -ErrorAction Stop -Force
+                }
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
-                # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
-                Break
+                Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
+                $StepPass = $false
+                $debugActionPreference
+                $Error[0].Exception.GetType().FullName
             }
         }
-        if ($ScriptBlock.length -gt 0) {
+        if ($ScriptBlock.length -gt 0 -and $StepPass ) {
             Write-Verbose "Starting New-PsSession"
             if ($ConfigurationName -eq "ClientDefault") {
-                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
+                try {
+                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
+                } catch {
+                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                    # Update error log
+                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    $Error[0].Exception.GetType().FullName
+                    $StepPass = $false
+                }
             } else {
                 try {
                     $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ConfigurationName $ConfigurationName -ErrorAction Stop
@@ -345,23 +413,27 @@ foreach ($ComputerName in $ComputerNames) {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
                     # Update error log
                     Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
-                    # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
-                    Break
+                    $Error[0].Exception.GetType().FullName
+                    $StepPass = $false
                 }
             }
-            Write-Verbose "Starting Invoke-Command"
-            try {
-                Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
-            } catch [System.Management.Automation.DriveNotFoundException] {
-                Write-Warning "Computer $ComputerName connection failed"
-                # Update error log
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
-            } catch {
-                Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
-                # $Error[0].Exception.GetType().FullName # This line can be used to trap additional error types.
+            If ($StepPass) {
+                Write-Verbose "Starting Invoke-Command"
+                try {
+                    Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+                } catch [System.Management.Automation.DriveNotFoundException] {
+                    Write-Warning "Computer $ComputerName connection failed"
+                    # Update error log
+                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                } catch {
+                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    $Error[0].Exception.GetType().FullName
+                }
             }
-            Remove-PsSession -Session $Session
+            if ($null -ne $Session) {
+                Remove-PsSession -Session $Session
+            }
         }
     } else {
         Write-Warning "Computer $ComputerName not online"
@@ -369,6 +441,7 @@ foreach ($ComputerName in $ComputerNames) {
         Add-Content -Path (($PSCommandPath).split(".")[0] + ".NotOnline.txt") -Value $ComputerName
     }
 }
+
 if ($AsJob) {
     Write-Output "============================="
     Write-Output "Waiting for jobs to complete"
