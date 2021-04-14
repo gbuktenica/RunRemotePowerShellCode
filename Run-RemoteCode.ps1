@@ -124,7 +124,7 @@
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v1.2.0 20210414
+    Release      : v1.2.1 20210414
 #>
 [CmdletBinding()]
 param (
@@ -442,12 +442,14 @@ foreach ($ComputerName in $ComputerNames) {
                 Remove-PsSession -Session $Session
             }
             # Remove destination files
-            if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0 -and -not $Keep) {
-                $RemoveFolder = "Destination:\" + (Split-Path $SourcePath -leaf)
-                Write-Verbose "Removing Folder: $RemoveFolder"
-                Remove-Item $RemoveFolder -Recurse
-            }
             if (Test-Path -Path "Destination:\") {
+                if (-not $Keep) {
+                    $RemoveFolder = "Destination:\" + (Split-Path $SourcePath -leaf)
+                    if (Test-Path -Path $RemoveFolder) {
+                        Write-Verbose "Removing Folder: $RemoveFolder"
+                        Remove-Item $RemoveFolder -Recurse
+                    }
+                }
                 Write-Verbose "Removing PSDrive"
                 Remove-PSDrive -Name Destination -ErrorAction Stop -Force
             }
