@@ -52,6 +52,10 @@
     Example: -DestinationPath "LocalShare\LocalSubFolder"
     The script will loop through and copy the files to the remote computers.
 
+.PARAMETER Keep
+    The switch will not delete the local folder that was copied to the remote computer.
+    By default this script will remove the local folder after the script block has completed execution.
+
 .PARAMETER Credential
     This PsCredential is the security context that will be used to run the remote code.
     If this is omitted the operator will be prompted for credential at first run.
@@ -120,7 +124,7 @@
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v1.0.1 20210406
+    Release      : v1.2.0 20210414
 #>
 [CmdletBinding()]
 param (
@@ -152,6 +156,9 @@ param (
     [Parameter()]
     [string]
     $DestinationPath,
+    [Parameter()]
+    [switch]
+    $Keep,
     [Parameter()]
     [pscredential]
     $Credential,
@@ -376,13 +383,12 @@ foreach ($ComputerName in $ComputerNames) {
         $error.clear()
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-            Write-Verbose "Starting file copy"
+
             try {
+                Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
+                Write-Verbose "Starting file copy"
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
-                if (Test-Path -Path "Destination:\") {
-                    Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-                }
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
@@ -392,7 +398,7 @@ foreach ($ComputerName in $ComputerNames) {
             }
         }
         if ($ScriptBlock.length -gt 0 -and $StepPass ) {
-            Write-Verbose "Starting New-PsSession"
+            Write-Verbose "Creating new PsSession"
             if ($ConfigurationName -eq "ClientDefault") {
                 try {
                     $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
@@ -432,7 +438,18 @@ foreach ($ComputerName in $ComputerNames) {
                 }
             }
             if ($null -ne $Session) {
+                Write-Verbose "Removing PsSession"
                 Remove-PsSession -Session $Session
+            }
+            # Remove destination files
+            if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0 -and -not $Keep) {
+                $RemoveFolder = "Destination:\" + (Split-Path $SourcePath -leaf)
+                Write-Verbose "Removing Folder: $RemoveFolder"
+                Remove-Item $RemoveFolder -Recurse
+            }
+            if (Test-Path -Path "Destination:\") {
+                Write-Verbose "Removing PSDrive"
+                Remove-PSDrive -Name Destination -ErrorAction Stop -Force
             }
         }
     } else {
