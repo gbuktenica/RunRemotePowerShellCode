@@ -383,9 +383,11 @@ foreach ($ComputerName in $ComputerNames) {
         $error.clear()
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-            Write-Verbose "Starting file copy"
+
             try {
+                Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
+                Write-Verbose "Starting file copy"
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
@@ -396,7 +398,7 @@ foreach ($ComputerName in $ComputerNames) {
             }
         }
         if ($ScriptBlock.length -gt 0 -and $StepPass ) {
-            Write-Verbose "Starting New-PsSession"
+            Write-Verbose "Creating new PsSession"
             if ($ConfigurationName -eq "ClientDefault") {
                 try {
                     $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
@@ -436,16 +438,17 @@ foreach ($ComputerName in $ComputerNames) {
                 }
             }
             if ($null -ne $Session) {
+                Write-Verbose "Removing PsSession"
                 Remove-PsSession -Session $Session
             }
             # Remove destination files
             if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0 -and -not $Keep) {
-                Write-Verbose "Removing local directory"
                 $RemoveFolder = "Destination:\" + (Split-Path $SourcePath -leaf)
                 Write-Verbose "Removing Folder: $RemoveFolder"
-                Remove-Item $RemoveFolder
+                Remove-Item $RemoveFolder -Recurse
             }
             if (Test-Path -Path "Destination:\") {
+                Write-Verbose "Removing PSDrive"
                 Remove-PSDrive -Name Destination -ErrorAction Stop -Force
             }
         }
