@@ -387,9 +387,6 @@ foreach ($ComputerName in $ComputerNames) {
             try {
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
-                if (Test-Path -Path "Destination:\") {
-                    Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-                }
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
                 Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
@@ -441,9 +438,11 @@ foreach ($ComputerName in $ComputerNames) {
             if ($null -ne $Session) {
                 Remove-PsSession -Session $Session
             }
+            # Remove destination files
             if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0 -and -not $Keep) {
                 Write-Verbose "Removing local directory"
-                $RemoveFolder = $SourcePath + (Split-Path $SourcePath -leaf)
+                $RemoveFolder = "Destination:\" + (Split-Path $SourcePath -leaf)
+                Write-Verbose "Removing Folder: $RemoveFolder"
                 Remove-Item $RemoveFolder
             }
             if (Test-Path -Path "Destination:\") {
