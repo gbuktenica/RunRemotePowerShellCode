@@ -274,6 +274,14 @@ if ($null -eq $Credential) {
         $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
     }
 }
+# Download PsExec if not found
+if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
+    Write-Verbose "Downloading PsExec"
+    Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
+    Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
+} else {
+    Write-Verbose "PsExec already downloaded"
+}
 
 # If an external file has been set then read that file into an object of type scriptblock.
 if ($ScriptBlockFilePath.length -gt 0) {
@@ -382,6 +390,15 @@ foreach ($ComputerName in $ComputerNames) {
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
+        #############
+        #############
+        if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
+            Write-Verbose "Remote PowerShell not enabled"
+            Add-Content -Path (($PSCommandPath).split(".")[0] + ".EnablePsRemoting.txt") -Value $ComputerName
+            Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList @("-i", "-NoBanner", "\\$ComputerName", "`"PowerShell.exe -Command Enable-PsRemoting -Force`"")
+        }
+        #############
+        #############
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
 
             try {
