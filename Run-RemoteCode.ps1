@@ -390,15 +390,12 @@ foreach ($ComputerName in $ComputerNames) {
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
-
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
             Add-Content -Path (($PSCommandPath).split(".")[0] + ".EnablePsRemoting.txt") -Value $ComputerName
             Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait
         }
-
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-
             try {
                 Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
