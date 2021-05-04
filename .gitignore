@@ -57,7 +57,7 @@ $RECYCLE.BIN/
 *NotOnline.txt
 *Error.txt
 *CopyFailed.txt
-
+*EnablePsRemoting.txt
 # Ignore Working directory
 working/*
 !README.md
