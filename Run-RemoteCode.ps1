@@ -393,7 +393,7 @@ foreach ($ComputerName in $ComputerNames) {
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
             Add-Content -Path (($PSCommandPath).split(".")[0] + ".EnablePsRemoting.txt") -Value $ComputerName
-            Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait
+            Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
         }
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
             try {
