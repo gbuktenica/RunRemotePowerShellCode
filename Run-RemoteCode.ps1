@@ -351,6 +351,10 @@ if ($SourceType -eq "List") {
     $VerbosePreference = "SilentlyContinue"
     Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
     $VerbosePreference = $SavedPreference
+    if ($Filter.Length -eq 0) {
+        Write-Verbose '"Filter" parameter empty. Converting to "*"'
+        $Filter = "*"
+    }
     Write-Output "Reading Computer Objects from Active Directory"
     $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
     if ($FilterScript) {
