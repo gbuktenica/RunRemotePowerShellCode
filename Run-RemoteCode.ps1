@@ -362,6 +362,8 @@ if ($SourceType -eq "List") {
         $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
     }
     $ComputerNames = $ComputerNames.DNSHostName
+    # Export Computer list
+    Add-Content -Path (($PSCommandPath).split(".")[0] + ".DirectoryList.txt") -Value $ComputerNames
     Write-Output "Finished Reading Computer Objects from Active Directory"
 }
 
