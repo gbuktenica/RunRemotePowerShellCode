@@ -274,6 +274,14 @@ if ($null -eq $Credential) {
         $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
     }
 }
+# Download PsExec if not found
+if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
+    Write-Verbose "Downloading PsExec"
+    Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
+    Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
+} else {
+    Write-Verbose "PsExec already downloaded"
+}
 
 # If an external file has been set then read that file into an object of type scriptblock.
 if ($ScriptBlockFilePath.length -gt 0) {
@@ -343,6 +351,10 @@ if ($SourceType -eq "List") {
     $VerbosePreference = "SilentlyContinue"
     Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
     $VerbosePreference = $SavedPreference
+    if ($Filter.Length -eq 0) {
+        Write-Verbose '"Filter" parameter empty. Converting to "*"'
+        $Filter = "*"
+    }
     Write-Output "Reading Computer Objects from Active Directory"
     $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
     if ($FilterScript) {
@@ -350,6 +362,8 @@ if ($SourceType -eq "List") {
         $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
     }
     $ComputerNames = $ComputerNames.DNSHostName
+    # Export Computer list
+    Add-Content -Path (($PSCommandPath).split(".")[0] + ".DirectoryList.txt") -Value $ComputerNames
     Write-Output "Finished Reading Computer Objects from Active Directory"
 }
 
@@ -382,8 +396,12 @@ foreach ($ComputerName in $ComputerNames) {
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
+        if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
+            Write-Verbose "Remote PowerShell not enabled"
+            Add-Content -Path (($PSCommandPath).split(".")[0] + ".EnablePsRemoting.txt") -Value $ComputerName
+            Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
+        }
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-
             try {
                 Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
