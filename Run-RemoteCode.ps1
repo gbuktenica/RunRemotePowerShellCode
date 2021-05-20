@@ -311,6 +311,8 @@ if ($SourceType -eq "List") {
         Write-Verbose "ListPath not null. Continuing without operator input"
     }
     $ComputerNames = Get-Content $ListPath
+    # Ignore the local machine as remote connection requests will be refused.
+    $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
 } elseif ($SourceType -eq "Directory") {
     # Check that Active Directory dependencies are installed.
     # If dependencies are missing and can be installed then do so.
@@ -358,13 +360,12 @@ if ($SourceType -eq "List") {
         $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
     }
     $ComputerNames = $ComputerNames.DNSHostName
+    # Ignore the local machine as remote connection requests will be refused.
+    $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
     # Export Computer list
     Add-Content -Path (($PSCommandPath).split(".")[0] + ".DirectoryList.txt") -Value $ComputerNames
     Write-Output "Finished Reading Computer Objects from Active Directory"
 }
-
-# Ignore the local machine as remote connection requests will be refused.
-$ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
 
 # If a file copy is being done map a drive with credentials
 if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
