@@ -124,7 +124,7 @@
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v1.2.1 20210414
+    Release      : v2.0.1 20210520
 #>
 [CmdletBinding()]
 param (
@@ -137,7 +137,7 @@ param (
     $ListPath,
     [Parameter()]
     [string]
-    $Filter,
+    $Filter = "*",
     [Parameter()]
     [string]
     $SearchBase,
@@ -351,10 +351,6 @@ if ($SourceType -eq "List") {
     $VerbosePreference = "SilentlyContinue"
     Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
     $VerbosePreference = $SavedPreference
-    if ($Filter.Length -eq 0) {
-        Write-Verbose '"Filter" parameter empty. Converting to "*"'
-        $Filter = "*"
-    }
     Write-Output "Reading Computer Objects from Active Directory"
     $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
     if ($FilterScript) {
@@ -366,6 +362,9 @@ if ($SourceType -eq "List") {
     Add-Content -Path (($PSCommandPath).split(".")[0] + ".DirectoryList.txt") -Value $ComputerNames
     Write-Output "Finished Reading Computer Objects from Active Directory"
 }
+
+# Ignore the local machine as remote connection requests will be refused.
+$ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
 
 # If a file copy is being done map a drive with credentials
 if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
