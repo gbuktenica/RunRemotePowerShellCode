@@ -124,7 +124,7 @@
 .NOTES
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.0.1 20210520
+    Release      : v2.0.2 20210603
 #>
 [CmdletBinding()]
 param (
@@ -180,35 +180,57 @@ function Get-SavedCredentials {
     <#
     .SYNOPSIS
         Returns a PSCredential from an encrypted file.
+
     .DESCRIPTION
         Returns a PSCredential from a file encrypted using Windows Data Protection API (DAPI).
         If the file does not exist the user will be prompted for the username and password the first time.
         The GPO setting Network Access: Do not allow storage of passwords and credentials for network authentication must be set to Disabled
         otherwise the password will only persist for the length of the user session.
+
     .PARAMETER Title
         The name of the username and password pair. This allows multiple accounts to be saved such as a normal account and an administrator account.
+        The default value is "Default"
+
     .PARAMETER VaultPath
         The file path of the encrypted Json file for saving the username and password pair.
-        Default value is c:\users\<USERNAME>\PowerShellHash.json"
+        Default value is "c:\users\<USERNAME>\SavedCredentialsHash.json"
+
     .PARAMETER Renew
         Prompts the user for a new password for an existing pair.
         To be used after a password change.
+        Default value is $false
+
+    .PARAMETER SecureString
+        Saves and returns a SecureString object instead of PSCredential Object.
+        Used for non Credential secrets.
+        Default value is $false
+
     .EXAMPLE
         Enter-PsSession -ComputerName Computer -Credential (Get-SavedCredentials)
+        Returns a default PsCredential object into the Enter-PsSession command.
+
     .EXAMPLE
         $Credential = Get-SavedCredentials -Title Normal -VaultPath c:\temp\myFile.json
+        Returns a PsCredential object to to the variable $Credential
+
+    .EXAMPLE
+        $SecureString = Get-SavedCredentials -SecureString
+        Returns a SecureString object to to the variable $SecureString
+
     .LINK
         https://github.com/gbuktenica/GetSavedCredentials
+
     .NOTES
         License      : MIT License
-        Copyright (c): 2020 Glen Buktenica
-        Release      : v1.0.0 20200315
+        Copyright (c): 2021 Glen Buktenica
+        Release      : v1.1.0 20210413
     #>
     [CmdletBinding()]
     Param(
         [string]$Title = "Default",
-        [string]$VaultPath = "$env:USERPROFILE\PowerShellHash.json",
-        [switch]$Renew
+        [string]$VaultPath = "$env:USERPROFILE\SavedCredentialsHash.json",
+        [switch]$Renew,
+        [switch]$SecureString
     )
     $JsonChanged = $false
     if (-not (Test-path -Path $VaultPath)) {
@@ -231,7 +253,7 @@ function Get-SavedCredentials {
         $Json | Add-Member -Name $Title -value (Convertfrom-Json $TitleContent) -MemberType NoteProperty
         $JsonChanged = $true
     }
-    if ($Json.$Title.username.Length -eq 0) {
+    if ($Json.$Title.username.Length -eq 0 -and -not $SecureString) {
         #Prompt user for username if it is not saved.
         $Message = "Enter User name for> $Title"
         $Username = Read-Host $Message -ErrorAction Stop
@@ -240,27 +262,42 @@ function Get-SavedCredentials {
     }
     if ($Json.$Title.password.Length -eq 0 -or $Renew) {
         #Prompt user for Password if it is not saved.
-        $Message = "Enter Password for> " + $Json.$Title.username
-        $secureStringPwd = Read-Host $Message -AsSecureString -ErrorAction Stop
-        $secureStringText = $secureStringPwd | ConvertFrom-SecureString
-        $Json.$Title.password = $secureStringText
+        if ($SecureString) {
+            $Message = "Enter Secret for> " + $Json.$Title
+        } else {
+            $Message = "Enter Password for> " + $Json.$Title.username
+        }
+        $Json.$Title.password = ((Read-Host $Message -AsSecureString -ErrorAction Stop))
         $JsonChanged = $true
     }
-
-    $Username = $Json.$Title.username
-    Try {
-        # Build the PSCredential object and export it.
-        $SecurePassword = $Json.$Title.password | ConvertTo-SecureString -ErrorAction Stop
-        New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $SecurePassword -ErrorAction Stop
-    } catch {
-        # If building the credential failed for any reason delete it and run the function
-        # again which will prompt the user for username and password.
-        $TitleContent = " { `"username`":`"`", `"password`":`"`" }"
-        $Json | Add-Member -Name $Title -value (Convertfrom-Json $TitleContent) -MemberType NoteProperty -Force
-        $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
-        Get-SavedCredentials -Title $Title -VaultPath $VaultPath
+    If ($SecureString) {
+        Try {
+            # Build the SecureString object and export it.
+            $Json.$Title.password | ConvertTo-SecureString -ErrorAction Stop
+        } catch {
+            # If building the SecureString failed for any reason delete it and run the function
+            # again which will prompt the user for the secret.
+            $TitleContent = " { `"username`":`"`", `"password`":`"`" }"
+            $Json | Add-Member -Name $Title -value (Convertfrom-Json $TitleContent) -MemberType NoteProperty -Force
+            $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
+            Get-SavedCredentials -Title $Title -VaultPath $VaultPath -SecureString
+        }
+    } else {
+        $Username = $Json.$Title.username
+        Try {
+            # Build the PSCredential object and export it.
+            $SecurePassword = $Json.$Title.password | ConvertTo-SecureString -ErrorAction Stop
+            New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $SecurePassword -ErrorAction Stop
+        } catch {
+            # If building the credential failed for any reason delete it and run the function
+            # again which will prompt the user for username and password.
+            $TitleContent = " { `"username`":`"`", `"password`":`"`" }"
+            $Json | Add-Member -Name $Title -value (Convertfrom-Json $TitleContent) -MemberType NoteProperty -Force
+            $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
+            Get-SavedCredentials -Title $Title -VaultPath $VaultPath
+        }
     }
-    if ($JsonChanged) {
+    If ($JsonChanged) {
         # Save the Json object to file if it has changed.
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
     }
@@ -360,12 +397,13 @@ if ($SourceType -eq "List") {
         $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
     }
     $ComputerNames = $ComputerNames.DNSHostName
-    # Ignore the local machine as remote connection requests will be refused.
-    $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
     # Export Computer list
     Add-Content -Path (($PSCommandPath).split(".")[0] + ".DirectoryList.txt") -Value $ComputerNames
     Write-Output "Finished Reading Computer Objects from Active Directory"
 }
+
+# Ignore the local machine as remote connection requests will be refused.
+$ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
 
 # If a file copy is being done map a drive with credentials
 if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
@@ -378,6 +416,14 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     }
     if (Test-Path -Path "Destination:\") {
         Remove-PSDrive -Name Destination -ErrorAction Stop -Force
+    }
+    # Clean up conflicting SMB drives
+    $Drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.DisplayRoot -match (($SourcePath.replace("\\", "")).Split("\")[0]) }
+    foreach ($Drive in $Drives) {
+        $Message = "Removing drive " + $Drive.Name + " with path " + $Drive.DisplayRoot
+        Write-Verbose $Message
+        $Name = $drive.Name + ":"
+        Remove-SmbMapping -LocalPath $Name -Force
     }
     New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
 }
@@ -403,6 +449,13 @@ foreach ($ComputerName in $ComputerNames) {
         }
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
             try {
+                $Drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.DisplayRoot -match $ComputerName }
+                foreach ($Drive in $Drives) {
+                    $Message = "Removing drive " + $Drive.Name + " with path " + $Drive.DisplayRoot
+                    Write-Verbose $Message
+                    $Name = $drive.Name + ":"
+                    Remove-SmbMapping -LocalPath $Name -Force
+                }
                 Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
                 Write-Verbose "Starting file copy"
