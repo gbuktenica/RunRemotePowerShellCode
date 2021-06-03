@@ -466,6 +466,7 @@ foreach ($ComputerName in $ComputerNames) {
                 $StepPass = $false
                 $debugActionPreference
                 $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
             }
         }
         if ($ScriptBlock.length -gt 0 -and $StepPass ) {
@@ -478,6 +479,7 @@ foreach ($ComputerName in $ComputerNames) {
                     # Update error log
                     Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
                     $Error[0].Exception.GetType().FullName
+                    Write-Debug $Error[0]
                     $StepPass = $false
                 }
             } else {
@@ -491,6 +493,7 @@ foreach ($ComputerName in $ComputerNames) {
                     # Update error log
                     Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
                     $Error[0].Exception.GetType().FullName
+                    Write-Debug $Error[0]
                     $StepPass = $false
                 }
             }
@@ -502,9 +505,11 @@ foreach ($ComputerName in $ComputerNames) {
                     Write-Warning "Computer $ComputerName connection failed"
                     # Update error log
                     Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Write-Debug $Error[0]
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
                     Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Write-Debug $Error[0]
                     $Error[0].Exception.GetType().FullName
                 }
             }
