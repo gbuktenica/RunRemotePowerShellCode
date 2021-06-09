@@ -475,7 +475,9 @@ foreach ($ComputerName in $ComputerNames) {
             # Remove destination files
             if (Test-Path -Path "Destination:\") {
                 if (-not $Keep) {
-                    $RemoveFolder = "Destination:\" + (Split-Path $SourcePath -leaf)
+                    $SourcePathTail = $SourcePath -replace ("/","\") -split ("\\")
+                    $SourcePathTail = $SourcePathTail[($SourcePathTail.length - 1)]
+                    $RemoveFolder = "Destination:\" + $SourcePathTail
                     if (Test-Path -Path $RemoveFolder) {
                         Write-Verbose "Removing Folder: $RemoveFolder"
                         Remove-Item $RemoveFolder -Recurse
