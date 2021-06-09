@@ -378,7 +378,11 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     if (Test-Path -Path "Destination:\") {
         Remove-PSDrive -Name Destination -ErrorAction Stop -Force
     }
-    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
+    try {
+        New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
+    } catch {
+        Write-Output "Cannot map to $SourcePath"
+    }
 }
 
 if ($AsJob) {
@@ -404,6 +408,15 @@ foreach ($ComputerName in $ComputerNames) {
             try {
                 Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
+            } catch {
+                Write-Warning "Computer $ComputerName destination drive mapping failed"
+                Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
+                $StepPass = $false
+                $debugActionPreference
+                $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
+            }
+            try {
                 Write-Verbose "Starting file copy"
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
             } catch {
@@ -412,6 +425,7 @@ foreach ($ComputerName in $ComputerNames) {
                 $StepPass = $false
                 $debugActionPreference
                 $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
             }
         }
         if ($ScriptBlock.length -gt 0 -and $StepPass ) {
