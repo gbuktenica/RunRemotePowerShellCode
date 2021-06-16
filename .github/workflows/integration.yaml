@@ -6,7 +6,7 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
-      - name: Perform a Pester test from the Tests.ps1 file
+      - name: Perform a Pester test from the *.Tests.ps1 files
         shell: pwsh
         run: |
           .\Invoke-PesterTests.ps1 -Username ${{ secrets.USERNAME }} -Secret ${{ secrets.SECRET }}
