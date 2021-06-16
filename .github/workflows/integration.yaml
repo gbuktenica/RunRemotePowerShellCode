@@ -1,5 +1,5 @@
 name: Integration
-on:
+on: push
 jobs:
   integration:
     runs-on: self-hosted
