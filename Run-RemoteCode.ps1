@@ -163,6 +163,9 @@ param (
     [pscredential]
     $Credential,
     [Parameter()]
+    [string]
+    $Account = 'Admin',
+    [Parameter()]
     [switch]
     $Renew,
     [Parameter()]
@@ -271,7 +274,7 @@ if ($null -eq $Credential) {
     if ($NoSave) {
         $Credential = Get-Credential
     } else {
-        $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
+        $Credential = Get-SavedCredentials -Title $Account -Renew:$Renew
     }
 }
 # Download PsExec if not found
