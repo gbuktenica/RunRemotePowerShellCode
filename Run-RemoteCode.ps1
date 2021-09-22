@@ -273,7 +273,7 @@ function Get-SavedCredentials {
         $Json.$Title.password = ((Read-Host $Message -AsSecureString -ErrorAction Stop))
         $JsonChanged = $true
     }
-    If ($SecureString) {
+    if ($SecureString) {
         Try {
             # Build the SecureString object and export it.
             $Json.$Title.password | ConvertTo-SecureString -ErrorAction Stop
@@ -300,7 +300,7 @@ function Get-SavedCredentials {
             Get-SavedCredentials -Title $Title -VaultPath $VaultPath
         }
     }
-    If ($JsonChanged) {
+    if ($JsonChanged) {
         # Save the Json object to file if it has changed.
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
     }
@@ -509,7 +509,7 @@ foreach ($ComputerName in $ComputerNames) {
                     $StepPass = $false
                 }
             }
-            If ($StepPass) {
+            if ($StepPass) {
                 Write-Verbose "Starting Invoke-Command"
                 try {
                     Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
