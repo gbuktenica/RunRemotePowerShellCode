@@ -163,6 +163,9 @@ param (
     [pscredential]
     $Credential,
     [Parameter()]
+    [string]
+    $Account = 'Admin',
+    [Parameter()]
     [switch]
     $Renew,
     [Parameter()]
@@ -308,7 +311,7 @@ if ($null -eq $Credential) {
     if ($NoSave) {
         $Credential = Get-Credential
     } else {
-        $Credential = Get-SavedCredentials -Title Admin -Renew:$Renew
+        $Credential = Get-SavedCredentials -Title $Account -Renew:$Renew
     }
 }
 # Download PsExec if not found
@@ -458,6 +461,15 @@ foreach ($ComputerName in $ComputerNames) {
                 }
                 Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
+            } catch {
+                Write-Warning "Computer $ComputerName destination drive mapping failed"
+                Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
+                $StepPass = $false
+                $debugActionPreference
+                $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
+            }
+            try {
                 Write-Verbose "Starting file copy"
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
             } catch {
@@ -520,7 +532,9 @@ foreach ($ComputerName in $ComputerNames) {
             # Remove destination files
             if (Test-Path -Path "Destination:\") {
                 if (-not $Keep) {
-                    $RemoveFolder = "Destination:\" + (Split-Path $SourcePath -leaf)
+                    $SourcePathTail = $SourcePath -replace ("/","\") -split ("\\")
+                    $SourcePathTail = $SourcePathTail[($SourcePathTail.length - 1)]
+                    $RemoveFolder = "Destination:\" + $SourcePathTail
                     if (Test-Path -Path $RemoveFolder) {
                         Write-Verbose "Removing Folder: $RemoveFolder"
                         Remove-Item $RemoveFolder -Recurse
