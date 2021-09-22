@@ -122,9 +122,11 @@
     https://github.com/gbuktenica/RunRemotePowerShellCode
 
 .NOTES
+    Requirements : Port TCP 445  for PsExec
+                 : Port TCP 5985 for PowerShell Remoting
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.0.2 20210603
+    Release      : v2.0.2 20210922
 #>
 [CmdletBinding()]
 param (
