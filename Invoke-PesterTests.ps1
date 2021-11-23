@@ -16,10 +16,23 @@ if ($Secret.length -gt 0) {
     $SecurePassword = $Secret | ConvertTo-SecureString -AsPlainText -Force
     $Credential = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $SecurePassword -ErrorAction Stop
     Write-Host "Creating Pester Container with Credentials"
-    $PesterContainer = New-PesterContainer -Path $TestPath -Data @{ 'Credential' = $Credential }
+    try {
+        $PesterContainer = New-PesterContainer -Path $TestPath -Data @{ 'Credential' = $Credential } -ErrorAction Stop
+    } catch {
+        $Error
+        Write-Output "Failed to create PesterContainer"
+        Exit 1
+    }
+
 } else {
     Write-Host "Creating Pester Container"
-    $PesterContainer = New-PesterContainer -Path $TestPath
+    try {
+        $PesterContainer = New-PesterContainer -Path $TestPath
+    } catch {
+        $Error
+        Write-Output "Failed to create PesterContainer"
+        Exit 1
+    }
 }
 Write-Host "Invoking Pester Container"
 $PesterResult = Invoke-Pester -Container $PesterContainer -ErrorAction Stop -Output Diagnostic -PassThru
