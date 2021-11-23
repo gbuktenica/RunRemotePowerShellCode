@@ -1,0 +1,13 @@
+name: Integration
+on: push
+on: workflow_dispatch
+jobs:
+  integration:
+    runs-on: self-hosted
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - name: Perform a Pester test from the *.Tests.ps1 files
+        shell: pwsh
+        run: |
+          .\Invoke-PesterTests.ps1 -Username ${{ secrets.USERNAME }} -Secret ${{ secrets.SECRET }} -Verbose

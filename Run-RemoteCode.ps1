@@ -122,9 +122,11 @@
     https://github.com/gbuktenica/RunRemotePowerShellCode
 
 .NOTES
+    Requirements : Port TCP 445  for PsExec
+                 : Port TCP 5985 for PowerShell Remoting
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.0.1 20210520
+    Release      : v2.0.2 2021 11 23
 #>
 [CmdletBinding()]
 param (
@@ -183,29 +185,37 @@ function Get-SavedCredentials {
     <#
     .SYNOPSIS
         Returns a PSCredential from an encrypted file.
+
     .DESCRIPTION
         Returns a PSCredential from a file encrypted using Windows Data Protection API (DAPI).
         If the file does not exist the user will be prompted for the username and password the first time.
         The GPO setting Network Access: Do not allow storage of passwords and credentials for network authentication must be set to Disabled
         otherwise the password will only persist for the length of the user session.
+
     .PARAMETER Title
         The name of the username and password pair. This allows multiple accounts to be saved such as a normal account and an administrator account.
+
     .PARAMETER VaultPath
         The file path of the encrypted Json file for saving the username and password pair.
         Default value is c:\users\<USERNAME>\PowerShellHash.json"
+
     .PARAMETER Renew
         Prompts the user for a new password for an existing pair.
         To be used after a password change.
+
     .EXAMPLE
         Enter-PsSession -ComputerName Computer -Credential (Get-SavedCredentials)
+
     .EXAMPLE
         $Credential = Get-SavedCredentials -Title Normal -VaultPath c:\temp\myFile.json
+
     .LINK
         https://github.com/gbuktenica/GetSavedCredentials
+
     .NOTES
         License      : MIT License
         Copyright (c): 2020 Glen Buktenica
-        Release      : v1.0.0 20200315
+        Release      : v1.0.0 2020 03 15
     #>
     [CmdletBinding()]
     Param(
@@ -263,7 +273,7 @@ function Get-SavedCredentials {
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
         Get-SavedCredentials -Title $Title -VaultPath $VaultPath
     }
-    if ($JsonChanged) {
+    If ($JsonChanged) {
         # Save the Json object to file if it has changed.
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
     }
@@ -314,6 +324,8 @@ if ($SourceType -eq "List") {
         Write-Verbose "ListPath not null. Continuing without operator input"
     }
     $ComputerNames = Get-Content $ListPath
+    # Ignore the local machine as remote connection requests will be refused.
+    $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
 } elseif ($SourceType -eq "Directory") {
     # Check that Active Directory dependencies are installed.
     # If dependencies are missing and can be installed then do so.
@@ -362,7 +374,7 @@ if ($SourceType -eq "List") {
     }
     $ComputerNames = $ComputerNames.DNSHostName
     # Export Computer list
-    Add-Content -Path (($PSCommandPath).split(".")[0] + ".DirectoryList.txt") -Value $ComputerNames
+    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".DirectoryList.txt") -Value $ComputerNames
     Write-Output "Finished Reading Computer Objects from Active Directory"
 }
 
@@ -381,11 +393,15 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     if (Test-Path -Path "Destination:\") {
         Remove-PSDrive -Name Destination -ErrorAction Stop -Force
     }
-    try {
-        New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
-    } catch {
-        Write-Output "Cannot map to $SourcePath"
+    # Clean up conflicting SMB drives
+    $Drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.DisplayRoot -match (($SourcePath.replace("\\", "")).Split("\")[0]) }
+    foreach ($Drive in $Drives) {
+        $Message = "Removing drive " + $Drive.Name + " with path " + $Drive.DisplayRoot
+        Write-Verbose $Message
+        $Name = $drive.Name + ":"
+        Remove-SmbMapping -LocalPath $Name -Force
     }
+    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
 }
 
 if ($AsJob) {
@@ -404,16 +420,23 @@ foreach ($ComputerName in $ComputerNames) {
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
-            Add-Content -Path (($PSCommandPath).split(".")[0] + ".EnablePsRemoting.txt") -Value $ComputerName
+            Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".EnablePsRemoting.txt") -Value $ComputerName
             Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
         }
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
             try {
+                $Drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.DisplayRoot -match $ComputerName }
+                foreach ($Drive in $Drives) {
+                    $Message = "Removing drive " + $Drive.Name + " with path " + $Drive.DisplayRoot
+                    Write-Verbose $Message
+                    $Name = $drive.Name + ":"
+                    Remove-SmbMapping -LocalPath $Name -Force
+                }
                 Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
             } catch {
                 Write-Warning "Computer $ComputerName destination drive mapping failed"
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
                 $StepPass = $false
                 $debugActionPreference
                 $Error[0].Exception.GetType().FullName
@@ -424,7 +447,7 @@ foreach ($ComputerName in $ComputerNames) {
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
                 $StepPass = $false
                 $debugActionPreference
                 $Error[0].Exception.GetType().FullName
@@ -439,8 +462,9 @@ foreach ($ComputerName in $ComputerNames) {
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
                     $Error[0].Exception.GetType().FullName
+                    Write-Debug $Error[0]
                     $StepPass = $false
                 }
             } else {
@@ -452,22 +476,25 @@ foreach ($ComputerName in $ComputerNames) {
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
                     $Error[0].Exception.GetType().FullName
+                    Write-Debug $Error[0]
                     $StepPass = $false
                 }
             }
-            If ($StepPass) {
+            if ($StepPass) {
                 Write-Verbose "Starting Invoke-Command"
                 try {
                     Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
                 } catch [System.Management.Automation.DriveNotFoundException] {
                     Write-Warning "Computer $ComputerName connection failed"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                    Write-Debug $Error[0]
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                    Write-Debug $Error[0]
                     $Error[0].Exception.GetType().FullName
                 }
             }
@@ -478,7 +505,7 @@ foreach ($ComputerName in $ComputerNames) {
             # Remove destination files
             if (Test-Path -Path "Destination:\") {
                 if (-not $Keep) {
-                    $SourcePathTail = $SourcePath -replace ("/","\") -split ("\\")
+                    $SourcePathTail = $SourcePath -replace ("/", "\") -split ("\\")
                     $SourcePathTail = $SourcePathTail[($SourcePathTail.length - 1)]
                     $RemoveFolder = "Destination:\" + $SourcePathTail
                     if (Test-Path -Path $RemoveFolder) {
@@ -493,7 +520,7 @@ foreach ($ComputerName in $ComputerNames) {
     } else {
         Write-Warning "Computer $ComputerName not online"
         # Update connection log
-        Add-Content -Path (($PSCommandPath).split(".")[0] + ".NotOnline.txt") -Value $ComputerName
+        Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".NotOnline.txt") -Value $ComputerName
     }
 }
 
