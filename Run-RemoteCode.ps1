@@ -194,48 +194,34 @@ function Get-SavedCredentials {
 
     .PARAMETER Title
         The name of the username and password pair. This allows multiple accounts to be saved such as a normal account and an administrator account.
-        The default value is "Default"
 
     .PARAMETER VaultPath
         The file path of the encrypted Json file for saving the username and password pair.
-        Default value is "c:\users\<USERNAME>\SavedCredentialsHash.json"
+        Default value is c:\users\<USERNAME>\PowerShellHash.json"
 
     .PARAMETER Renew
         Prompts the user for a new password for an existing pair.
         To be used after a password change.
-        Default value is $false
-
-    .PARAMETER SecureString
-        Saves and returns a SecureString object instead of PSCredential Object.
-        Used for non Credential secrets.
-        Default value is $false
 
     .EXAMPLE
         Enter-PsSession -ComputerName Computer -Credential (Get-SavedCredentials)
-        Returns a default PsCredential object into the Enter-PsSession command.
 
     .EXAMPLE
         $Credential = Get-SavedCredentials -Title Normal -VaultPath c:\temp\myFile.json
-        Returns a PsCredential object to to the variable $Credential
-
-    .EXAMPLE
-        $SecureString = Get-SavedCredentials -SecureString
-        Returns a SecureString object to to the variable $SecureString
 
     .LINK
         https://github.com/gbuktenica/GetSavedCredentials
 
     .NOTES
         License      : MIT License
-        Copyright (c): 2021 Glen Buktenica
-        Release      : v1.1.0 20210413
+        Copyright (c): 2020 Glen Buktenica
+        Release      : v1.0.0 2020 03 15
     #>
     [CmdletBinding()]
     Param(
         [string]$Title = "Default",
-        [string]$VaultPath = "$env:USERPROFILE\SavedCredentialsHash.json",
-        [switch]$Renew,
-        [switch]$SecureString
+        [string]$VaultPath = "$env:USERPROFILE\PowerShellHash.json",
+        [switch]$Renew
     )
     $JsonChanged = $false
     if (-not (Test-path -Path $VaultPath)) {
@@ -258,7 +244,7 @@ function Get-SavedCredentials {
         $Json | Add-Member -Name $Title -value (Convertfrom-Json $TitleContent) -MemberType NoteProperty
         $JsonChanged = $true
     }
-    if ($Json.$Title.username.Length -eq 0 -and -not $SecureString) {
+    if ($Json.$Title.username.Length -eq 0) {
         #Prompt user for username if it is not saved.
         $Message = "Enter User name for> $Title"
         $Username = Read-Host $Message -ErrorAction Stop
@@ -267,42 +253,27 @@ function Get-SavedCredentials {
     }
     if ($Json.$Title.password.Length -eq 0 -or $Renew) {
         #Prompt user for Password if it is not saved.
-        if ($SecureString) {
-            $Message = "Enter Secret for> " + $Json.$Title
-        } else {
-            $Message = "Enter Password for> " + $Json.$Title.username
-        }
-        $Json.$Title.password = ((Read-Host $Message -AsSecureString -ErrorAction Stop))
+        $Message = "Enter Password for> " + $Json.$Title.username
+        $secureStringPwd = Read-Host $Message -AsSecureString -ErrorAction Stop
+        $secureStringText = $secureStringPwd | ConvertFrom-SecureString
+        $Json.$Title.password = $secureStringText
         $JsonChanged = $true
     }
-    if ($SecureString) {
-        Try {
-            # Build the SecureString object and export it.
-            $Json.$Title.password | ConvertTo-SecureString -ErrorAction Stop
-        } catch {
-            # If building the SecureString failed for any reason delete it and run the function
-            # again which will prompt the user for the secret.
-            $TitleContent = " { `"username`":`"`", `"password`":`"`" }"
-            $Json | Add-Member -Name $Title -value (Convertfrom-Json $TitleContent) -MemberType NoteProperty -Force
-            $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
-            Get-SavedCredentials -Title $Title -VaultPath $VaultPath -SecureString
-        }
-    } else {
-        $Username = $Json.$Title.username
-        Try {
-            # Build the PSCredential object and export it.
-            $SecurePassword = $Json.$Title.password | ConvertTo-SecureString -ErrorAction Stop
-            New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $SecurePassword -ErrorAction Stop
-        } catch {
-            # If building the credential failed for any reason delete it and run the function
-            # again which will prompt the user for username and password.
-            $TitleContent = " { `"username`":`"`", `"password`":`"`" }"
-            $Json | Add-Member -Name $Title -value (Convertfrom-Json $TitleContent) -MemberType NoteProperty -Force
-            $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
-            Get-SavedCredentials -Title $Title -VaultPath $VaultPath
-        }
+
+    $Username = $Json.$Title.username
+    Try {
+        # Build the PSCredential object and export it.
+        $SecurePassword = $Json.$Title.password | ConvertTo-SecureString -ErrorAction Stop
+        New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $SecurePassword -ErrorAction Stop
+    } catch {
+        # If building the credential failed for any reason delete it and run the function
+        # again which will prompt the user for username and password.
+        $TitleContent = " { `"username`":`"`", `"password`":`"`" }"
+        $Json | Add-Member -Name $Title -value (Convertfrom-Json $TitleContent) -MemberType NoteProperty -Force
+        $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
+        Get-SavedCredentials -Title $Title -VaultPath $VaultPath
     }
-    if ($JsonChanged) {
+    If ($JsonChanged) {
         # Save the Json object to file if it has changed.
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
     }
@@ -403,7 +374,7 @@ if ($SourceType -eq "List") {
     }
     $ComputerNames = $ComputerNames.DNSHostName
     # Export Computer list
-    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".DirectoryList.txt") -Value $ComputerNames
+    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".DirectoryList.txt") -Value $ComputerNames
     Write-Output "Finished Reading Computer Objects from Active Directory"
 }
 
@@ -449,7 +420,7 @@ foreach ($ComputerName in $ComputerNames) {
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
-            Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".EnablePsRemoting.txt") -Value $ComputerName
+            Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".EnablePsRemoting.txt") -Value $ComputerName
             Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
         }
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
@@ -465,7 +436,7 @@ foreach ($ComputerName in $ComputerNames) {
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
             } catch {
                 Write-Warning "Computer $ComputerName destination drive mapping failed"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".CopyFailed.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
                 $StepPass = $false
                 $debugActionPreference
                 $Error[0].Exception.GetType().FullName
@@ -476,7 +447,7 @@ foreach ($ComputerName in $ComputerNames) {
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".CopyFailed.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
                 $StepPass = $false
                 $debugActionPreference
                 $Error[0].Exception.GetType().FullName
@@ -491,7 +462,7 @@ foreach ($ComputerName in $ComputerNames) {
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
                     $Error[0].Exception.GetType().FullName
                     Write-Debug $Error[0]
                     $StepPass = $false
@@ -505,7 +476,7 @@ foreach ($ComputerName in $ComputerNames) {
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
                     $Error[0].Exception.GetType().FullName
                     Write-Debug $Error[0]
                     $StepPass = $false
@@ -518,11 +489,11 @@ foreach ($ComputerName in $ComputerNames) {
                 } catch [System.Management.Automation.DriveNotFoundException] {
                     Write-Warning "Computer $ComputerName connection failed"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
                     Write-Debug $Error[0]
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
                     Write-Debug $Error[0]
                     $Error[0].Exception.GetType().FullName
                 }
@@ -534,7 +505,7 @@ foreach ($ComputerName in $ComputerNames) {
             # Remove destination files
             if (Test-Path -Path "Destination:\") {
                 if (-not $Keep) {
-                    $SourcePathTail = $SourcePath -replace ("/","\") -split ("\\")
+                    $SourcePathTail = $SourcePath -replace ("/", "\") -split ("\\")
                     $SourcePathTail = $SourcePathTail[($SourcePathTail.length - 1)]
                     $RemoveFolder = "Destination:\" + $SourcePathTail
                     if (Test-Path -Path $RemoveFolder) {
@@ -549,7 +520,7 @@ foreach ($ComputerName in $ComputerNames) {
     } else {
         Write-Warning "Computer $ComputerName not online"
         # Update connection log
-        Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".NotOnline.txt") -Value $ComputerName
+        Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".NotOnline.txt") -Value $ComputerName
     }
 }
 
