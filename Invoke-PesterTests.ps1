@@ -17,7 +17,7 @@ if ($Secret.length -gt 0) {
     $Credential = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $SecurePassword -ErrorAction Stop
     Write-Host "Creating Pester Container with Credentials"
     try {
-        $PesterContainer = New-PesterContainer -Path $TestPath -Data @{ 'Credential' = $Credential } -ErrorAction Stop -Verbose
+        $PesterContainer = New-PesterContainer -Path $TestPath -Data @{ 'Credential' = $Credential } -ErrorAction Stop
     } catch {
         $Error
         Write-Output "Failed to create PesterContainer"
