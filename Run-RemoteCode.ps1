@@ -126,7 +126,7 @@
                  : Port TCP 5985 for PowerShell Remoting
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.0.2 20210922
+    Release      : v2.0.2 2021 11 23
 #>
 [CmdletBinding()]
 param (
@@ -403,7 +403,7 @@ if ($SourceType -eq "List") {
     }
     $ComputerNames = $ComputerNames.DNSHostName
     # Export Computer list
-    Add-Content -Path (($PSCommandPath).split(".")[0] + ".DirectoryList.txt") -Value $ComputerNames
+    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".DirectoryList.txt") -Value $ComputerNames
     Write-Output "Finished Reading Computer Objects from Active Directory"
 }
 
@@ -449,7 +449,7 @@ foreach ($ComputerName in $ComputerNames) {
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
-            Add-Content -Path (($PSCommandPath).split(".")[0] + ".EnablePsRemoting.txt") -Value $ComputerName
+            Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".EnablePsRemoting.txt") -Value $ComputerName
             Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
         }
         if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
@@ -465,7 +465,7 @@ foreach ($ComputerName in $ComputerNames) {
                 New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
             } catch {
                 Write-Warning "Computer $ComputerName destination drive mapping failed"
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".CopyFailed.txt") -Value $ComputerName
                 $StepPass = $false
                 $debugActionPreference
                 $Error[0].Exception.GetType().FullName
@@ -476,7 +476,7 @@ foreach ($ComputerName in $ComputerNames) {
                 Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
             } catch {
                 Write-Warning "Computer $ComputerName copy failed"
-                Add-Content -Path (($PSCommandPath).split(".")[0] + ".CopyFailed.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".CopyFailed.txt") -Value $ComputerName
                 $StepPass = $false
                 $debugActionPreference
                 $Error[0].Exception.GetType().FullName
@@ -491,7 +491,7 @@ foreach ($ComputerName in $ComputerNames) {
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".Error.txt") -Value $ComputerName
                     $Error[0].Exception.GetType().FullName
                     Write-Debug $Error[0]
                     $StepPass = $false
@@ -505,7 +505,7 @@ foreach ($ComputerName in $ComputerNames) {
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".Error.txt") -Value $ComputerName
                     $Error[0].Exception.GetType().FullName
                     Write-Debug $Error[0]
                     $StepPass = $false
@@ -518,11 +518,11 @@ foreach ($ComputerName in $ComputerNames) {
                 } catch [System.Management.Automation.DriveNotFoundException] {
                     Write-Warning "Computer $ComputerName connection failed"
                     # Update error log
-                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".Error.txt") -Value $ComputerName
                     Write-Debug $Error[0]
                 } catch {
                     Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    Add-Content -Path (($PSCommandPath).split(".")[0] + ".Error.txt") -Value $ComputerName
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".Error.txt") -Value $ComputerName
                     Write-Debug $Error[0]
                     $Error[0].Exception.GetType().FullName
                 }
@@ -549,7 +549,7 @@ foreach ($ComputerName in $ComputerNames) {
     } else {
         Write-Warning "Computer $ComputerName not online"
         # Update connection log
-        Add-Content -Path (($PSCommandPath).split(".")[0] + ".NotOnline.txt") -Value $ComputerName
+        Add-Content -Path (($PSCommandPath).Replace(".ps1","") + ".NotOnline.txt") -Value $ComputerName
     }
 }
 
