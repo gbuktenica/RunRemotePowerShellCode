@@ -1,6 +1,5 @@
 name: Integration
-on: push
-on: workflow_dispatch
+on: [push, workflow_dispatch]
 jobs:
   integration:
     runs-on: self-hosted
