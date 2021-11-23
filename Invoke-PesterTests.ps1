@@ -23,4 +23,8 @@ if ($Secret.length -gt 0) {
 }
 Write-Host "Invoking Pester Container"
 $PesterResult = Invoke-Pester -Container $PesterContainer -ErrorAction Stop -Output Diagnostic -PassThru
-if ($PesterResult.Result -ne 'Passed') { Exit 1; return }
+if ($PesterResult.Result -ne 'Passed') {
+    $PesterResult
+    Exit 1
+    return
+}
