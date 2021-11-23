@@ -3,8 +3,8 @@
     Runs Integration Pester tests
 .EXAMPLE
     .\Invoke-PesterTests.ps1
-
 #>
+[CmdletBinding()]
 param (
     $TestPath = $PSScriptRoot,
     $Username,
