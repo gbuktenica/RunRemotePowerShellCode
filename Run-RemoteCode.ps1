@@ -133,57 +133,41 @@
 #>
 [CmdletBinding()]
 param (
-    [Parameter()]
-    [ValidateSet('List', 'Directory')]
-    [string]
+    [Parameter()] [ValidateSet('List', 'Directory')] [string]
     $SourceType = 'List',
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $ListPath,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $Filter = "*",
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $SearchBase,
-    [Parameter()]
-    [ScriptBlock]
+    [Parameter()] [ScriptBlock]
     $FilterScript,
-    [Parameter()]
-    [ScriptBlock]
+    [Parameter()] [ScriptBlock]
     $ScriptBlock,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $ScriptBlockFilePath,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $SourcePath,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $DestinationPath,
-    [Parameter()]
-    [switch]
+    [Parameter()] [switch]
     $Keep,
-    [Parameter()]
-    [pscredential]
+    [Parameter()] [pscredential]
     $Credential,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $Account = 'Admin',
-    [Parameter()]
-    [switch]
+    [Parameter()] [switch]
     $Renew,
-    [Parameter()]
-    [switch]
+    [Parameter()] [switch]
     $NoSave,
-    [Parameter()]
-    [ValidateSet('ClientDefault', 'Microsoft.PowerShell', 'Powershell.6', 'PowerShell.7')]
-    [string]
+    [Parameter()] [ValidateSet('ClientDefault', 'Microsoft.PowerShell', 'Powershell.6', 'PowerShell.7')]    [string]
     $ConfigurationName = 'ClientDefault',
-    [Parameter()]
-    [switch]
-    $AsJob
-)
+    [Parameter()] [switch]
+    $AsJob,
+    [Parameter()] [switch]
+    $SkipDependencies
+    )
 function Get-SavedCredentials {
     <#
     .SYNOPSIS
@@ -281,7 +265,16 @@ function Get-SavedCredentials {
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
     }
 }
+
 function Install-Dependencies {
+    [CmdletBinding()]
+    param (
+        [Parameter()] [switch]
+        $SkipDependencies
+    )
+    if ($SkipDependencies) {
+        Write-Verbose "Skipping Dependency check"
+    }
     # Download PsExec if not found
     if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
         Write-Verbose "Downloading PsExec"
@@ -326,15 +319,19 @@ function Install-Dependencies {
         }
     }
 }
-# Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
-if ($null -eq $Credential) {
-    if ($NoSave) {
-        $Credential = Get-Credential
-    } else {
-        $Credential = Get-SavedCredentials -Title $Account -Renew:$Renew
-    }
-}
+
 function New-SourceList {
+    [CmdletBinding()]
+    Param(
+        [Parameter()] [ValidateSet('List', 'Directory')] [string]
+        $SourceType,
+        [Parameter()] [string]
+        $ListPath,
+        [Parameter()] [ScriptBlock]
+        $FilterScript,
+        [Parameter()] [string]
+        $Filter
+    )
     # Generate the list of computer names.
     if ($SourceType -eq "List") {
         # List SourceType selected, so read the text file.
@@ -356,8 +353,6 @@ function New-SourceList {
             Write-Verbose "ListPath not null. Continuing without operator input"
         }
         $ComputerNames = Get-Content $ListPath
-        # Ignore the local machine as remote connection requests will be refused.
-        $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
     } elseif ($SourceType -eq "Directory") {
         $SavedPreference = $VerbosePreference
         $VerbosePreference = "SilentlyContinue"
@@ -374,17 +369,25 @@ function New-SourceList {
         Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".DirectoryList.txt") -Value $ComputerNames
         Write-Output "Finished Reading Computer Objects from Active Directory"
     }
+    # Ignore the local machine as remote connection requests will be refused.
+    $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
 }
+# Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
+if ($null -eq $Credential) {
+    if ($NoSave) {
+        $Credential = Get-Credential
+    } else {
+        $Credential = Get-SavedCredentials -Title $Account -Renew:$Renew
+    }
+}
+
+Install-Dependencies -SkipDependencies:$SkipDependencies
+$ComputerNames  = New-SourceList -SourceType $SourceType -ListPath $ListPath -FilterScript $FilterScript -Filter $Filter
 # If an external file has been set then read that file into an object of type scriptblock.
 if ($ScriptBlockFilePath.length -gt 0) {
     Write-Verbose "Reading File: $ScriptBlockFilePath"
     [ScriptBlock]$ScriptBlock = [Scriptblock]::Create((Get-Content -Path $ScriptBlockFilePath -Raw -ErrorAction Stop))
 }
-
-
-
-# Ignore the local machine as remote connection requests will be refused.
-$ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
 
 # If a file copy is being done map a drive with credentials
 if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
