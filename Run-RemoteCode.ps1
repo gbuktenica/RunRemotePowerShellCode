@@ -372,6 +372,16 @@ function New-SourceList {
     # Ignore the local machine as remote connection requests will be refused.
     $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
 }
+
+function Start-RemoteSession {
+    # If a file copy is being done map a drive with credentials
+    if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
+    }
+
+    # https://stackoverflow.com/questions/10741609/copy-file-remotely-with-powershell/39122508
+}
+
+#Region Main
 # Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
 if ($null -eq $Credential) {
     if ($NoSave) {
@@ -382,50 +392,11 @@ if ($null -eq $Credential) {
 }
 
 Install-Dependencies -SkipDependencies:$SkipDependencies
-$ComputerNames  = New-SourceList -SourceType $SourceType -ListPath $ListPath -FilterScript $FilterScript -Filter $Filter
-# If an external file has been set then read that file into an object of type scriptblock.
+$ComputerNames = New-SourceList -SourceType $SourceType -ListPath $ListPath -FilterScript $FilterScript -Filter $Filter
 if ($ScriptBlockFilePath.length -gt 0) {
     Write-Verbose "Reading File: $ScriptBlockFilePath"
     [ScriptBlock]$ScriptBlock = [Scriptblock]::Create((Get-Content -Path $ScriptBlockFilePath -Raw -ErrorAction Stop))
 }
-
-# If a file copy is being done map a drive with credentials
-if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-    Write-Verbose "File copy requested"
-    Write-Verbose "SourcePath: $SourcePath"
-    Write-Verbose "DestinationPath: $DestinationPath"
-    # Clean up old PSDrives if not cleaned up in previous execution
-    if (Test-Path -Path "Source:\") {
-        Remove-PSDrive -Name Source -ErrorAction Stop -Force
-    }
-    if (Test-Path -Path "Destination:\") {
-        Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-    }
-    # Clean up conflicting SMB drives
-    $Drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.DisplayRoot -match (($SourcePath.replace("\\", "")).Split("\")[0]) }
-    foreach ($Drive in $Drives) {
-        $Message = "Removing drive " + $Drive.Name + " with path " + $Drive.DisplayRoot
-        Write-Verbose $Message
-        $Name = $drive.Name + ":"
-        Remove-SmbMapping -LocalPath $Name -Force
-    }
-    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
-}
-
-
-
-
-
-# https://stackoverflow.com/questions/10741609/copy-file-remotely-with-powershell/39122508
-
-
-
-
-
-
-
-
-#Region Main
 if ($AsJob) {
     # Remove any existing jobs from a previous run.
     Get-Job | Remove-Job
@@ -433,9 +404,18 @@ if ($AsJob) {
 $ProgressCount = 0
 $ProgressTotal = ($ComputerNames).count
 # Run the remote jobs on all computers
+
+
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
     $ProgressCount ++
+
+    
+    ###################
+    Start-RemoteSession
+    ###################
+
+
     $StepPass = $true
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
