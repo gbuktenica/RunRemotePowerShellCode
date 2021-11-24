@@ -122,11 +122,14 @@
     https://github.com/gbuktenica/RunRemotePowerShellCode
 
 .NOTES
-    Requirements : Port TCP 445  for PsExec
-                 : Port TCP 5985 for PowerShell Remoting
+    Requirements: Port TCP 5985 for PowerShell Remoting
+
+    Optional    : Port TCP 445  for PsExec
+                : Port TCP 139 / 445 for legacy file copy
+
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.0.2 2021 11 23
+    Release      : v2.1.0 2021 11 24
 #>
 [CmdletBinding()]
 param (
@@ -278,55 +281,15 @@ function Get-SavedCredentials {
         $Json | ConvertTo-Json -depth 3 | Set-Content $VaultPath -ErrorAction Stop
     }
 }
-
-# Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
-if ($null -eq $Credential) {
-    if ($NoSave) {
-        $Credential = Get-Credential
+function Install-Dependencies {
+    # Download PsExec if not found
+    if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
+        Write-Verbose "Downloading PsExec"
+        Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
+        Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
     } else {
-        $Credential = Get-SavedCredentials -Title $Account -Renew:$Renew
+        Write-Verbose "PsExec already downloaded"
     }
-}
-# Download PsExec if not found
-if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
-    Write-Verbose "Downloading PsExec"
-    Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
-    Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
-} else {
-    Write-Verbose "PsExec already downloaded"
-}
-
-# If an external file has been set then read that file into an object of type scriptblock.
-if ($ScriptBlockFilePath.length -gt 0) {
-    Write-Verbose "Reading File: $ScriptBlockFilePath"
-    [ScriptBlock]$ScriptBlock = [Scriptblock]::Create((Get-Content -Path $ScriptBlockFilePath -Raw -ErrorAction Stop))
-}
-
-# Generate the list of computer names.
-if ($SourceType -eq "List") {
-    # List SourceType selected, so read the text file.
-    if ($ListPath.length -eq 0) {
-        Write-Verbose "`$SourceType is list but `$ListPath is null so prompt operator for file path."
-        # Check that GUI dependencies are installed.
-        # If dependencies are missing and can be installed then do so.
-        if (-not (Get-Module -Name "FileSystemForms")) {
-            if (((Get-PackageProvider -Name nuget -ErrorAction SilentlyContinue).version) -lt [version]"2.8.5.201") {
-                Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
-            }
-            if (-not (Get-PSRepository -Name PSGallery)) {
-                Register-PSRepository -Default
-            }
-            Install-Module -Name FileSystemForms -ErrorAction Stop
-        }
-        $ListPath = Select-FileSystemForm -File -ext "txt"
-
-    } else {
-        Write-Verbose "ListPath not null. Continuing without operator input"
-    }
-    $ComputerNames = Get-Content $ListPath
-    # Ignore the local machine as remote connection requests will be refused.
-    $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
-} elseif ($SourceType -eq "Directory") {
     # Check that Active Directory dependencies are installed.
     # If dependencies are missing and can be installed then do so.
     if (-not(Get-Module -Name "ActiveDirectory")) {
@@ -362,21 +325,63 @@ if ($SourceType -eq "List") {
             Install-WindowsFeature -Name RSAT-AD-PowerShell
         }
     }
-    $SavedPreference = $VerbosePreference
-    $VerbosePreference = "SilentlyContinue"
-    Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
-    $VerbosePreference = $SavedPreference
-    Write-Output "Reading Computer Objects from Active Directory"
-    $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
-    if ($FilterScript) {
-        Write-Verbose "Running FilterScript"
-        $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
-    }
-    $ComputerNames = $ComputerNames.DNSHostName
-    # Export Computer list
-    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".DirectoryList.txt") -Value $ComputerNames
-    Write-Output "Finished Reading Computer Objects from Active Directory"
 }
+# Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
+if ($null -eq $Credential) {
+    if ($NoSave) {
+        $Credential = Get-Credential
+    } else {
+        $Credential = Get-SavedCredentials -Title $Account -Renew:$Renew
+    }
+}
+function New-SourceList {
+    # Generate the list of computer names.
+    if ($SourceType -eq "List") {
+        # List SourceType selected, so read the text file.
+        if ($ListPath.length -eq 0) {
+            Write-Verbose "`$SourceType is list but `$ListPath is null so prompt operator for file path."
+            # Check that GUI dependencies are installed.
+            # If dependencies are missing and can be installed then do so.
+            if (-not (Get-Module -Name "FileSystemForms")) {
+                if (((Get-PackageProvider -Name nuget -ErrorAction SilentlyContinue).version) -lt [version]"2.8.5.201") {
+                    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+                }
+                if (-not (Get-PSRepository -Name PSGallery)) {
+                    Register-PSRepository -Default
+                }
+                Install-Module -Name FileSystemForms -ErrorAction Stop
+            }
+            $ListPath = Select-FileSystemForm -File -ext "txt"
+        } else {
+            Write-Verbose "ListPath not null. Continuing without operator input"
+        }
+        $ComputerNames = Get-Content $ListPath
+        # Ignore the local machine as remote connection requests will be refused.
+        $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
+    } elseif ($SourceType -eq "Directory") {
+        $SavedPreference = $VerbosePreference
+        $VerbosePreference = "SilentlyContinue"
+        Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
+        $VerbosePreference = $SavedPreference
+        Write-Output "Reading Computer Objects from Active Directory"
+        $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
+        if ($FilterScript) {
+            Write-Verbose "Running FilterScript"
+            $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
+        }
+        $ComputerNames = $ComputerNames.DNSHostName
+        # Export Computer list
+        Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".DirectoryList.txt") -Value $ComputerNames
+        Write-Output "Finished Reading Computer Objects from Active Directory"
+    }
+}
+# If an external file has been set then read that file into an object of type scriptblock.
+if ($ScriptBlockFilePath.length -gt 0) {
+    Write-Verbose "Reading File: $ScriptBlockFilePath"
+    [ScriptBlock]$ScriptBlock = [Scriptblock]::Create((Get-Content -Path $ScriptBlockFilePath -Raw -ErrorAction Stop))
+}
+
+
 
 # Ignore the local machine as remote connection requests will be refused.
 $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
@@ -404,6 +409,7 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
 }
 
+#Region Main
 if ($AsJob) {
     # Remove any existing jobs from a previous run.
     Get-Job | Remove-Job
@@ -532,3 +538,4 @@ if ($AsJob) {
     Write-Output "Jobs complete"
     Get-Job | Receive-Job
 }
+#Endregion
