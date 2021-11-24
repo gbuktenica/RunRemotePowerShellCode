@@ -412,6 +412,19 @@ if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
     New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
 }
 
+
+
+
+
+# https://stackoverflow.com/questions/10741609/copy-file-remotely-with-powershell/39122508
+
+
+
+
+
+
+
+
 #Region Main
 if ($AsJob) {
     # Remove any existing jobs from a previous run.
