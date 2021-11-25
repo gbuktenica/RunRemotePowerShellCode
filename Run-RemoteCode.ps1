@@ -316,8 +316,23 @@ function Install-Dependencies {
                 }
             } else {
                 Write-Verbose "Server Operating System detected"
-                Import-Module ServerManager
-                Install-WindowsFeature -Name RSAT-AD-PowerShell
+                try {
+                    Import-Module ServerManager -ErrorAction Stop -Verbose:$false
+                    Install-WindowsFeature -Name RSAT-AD-PowerShell -ErrorAction Stop -Verbose:$false
+                } catch {
+                    Write-Error "Cannot import ServerManager Module. Script Terminating."
+                    Exit 1
+                }
+            }
+            $SavedPreference = $VerbosePreference
+            $VerbosePreference = "SilentlyContinue"
+            try {
+                Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
+            } catch {
+                Write-Error "Cannot import Active Directory Module. Script Terminating."
+                Exit 1
+            } finally {
+                $VerbosePreference = $SavedPreference
             }
         }
     }
@@ -357,10 +372,6 @@ function New-SourceList {
         }
         $ComputerNames = Get-Content $ListPath
     } elseif ($SourceType -eq "Directory") {
-        $SavedPreference = $VerbosePreference
-        $VerbosePreference = "SilentlyContinue"
-        Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
-        $VerbosePreference = $SavedPreference
         Write-Output "Reading Computer Objects from Active Directory"
         $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
         if ($FilterScript) {
