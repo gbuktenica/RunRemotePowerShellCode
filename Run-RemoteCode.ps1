@@ -167,7 +167,7 @@ param (
     $AsJob,
     [Parameter()] [switch]
     $SkipDependencies
-    )
+)
 function Get-SavedCredentials {
     <#
     .SYNOPSIS
@@ -274,48 +274,49 @@ function Install-Dependencies {
     )
     if ($SkipDependencies) {
         Write-Verbose "Skipping Dependency check"
-    }
-    # Download PsExec if not found
-    if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
-        Write-Verbose "Downloading PsExec"
-        Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
-        Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
     } else {
-        Write-Verbose "PsExec already downloaded"
-    }
-    # Check that Active Directory dependencies are installed.
-    # If dependencies are missing and can be installed then do so.
-    if (-not(Get-Module -Name "ActiveDirectory")) {
-        if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
-            Write-Verbose "Workstation Operating System detected"
-            if ([Environment]::OSVersion.Version -ge [version]"10.0.18090") {
-                Write-Verbose "Window 10 build greater than 1809 detected"
-                function Test-Admin {
-                    $currentUser = New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())
-                    $currentUser.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
-                }
-                if (-not(Test-Admin)) {
-                    if ($PSVersionTable.PSEdition -eq "Core") {
-                        Write-Verbose "Installing RSAT using Elevated PowerShell Core"
-                        Start-Process -Wait -Verb RunAs -FilePath pwsh.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
-
-                    } else {
-                        Write-Verbose "Installing RSAT using Elevated Windows PowerShell"
-                        Start-Process -Wait -Verb RunAs -FilePath powershell.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
-                    }
-                } else {
-                    Write-Verbose "Installing RSAT"
-                    Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop
-                }
-
-            } else {
-                Write-Error "`nActive Directory Module not found. `nInstall RSAT tools to enable: `nhttps://www.microsoft.com/en-us/download/details.aspx?id=45520" -ErrorAction Stop
-                exit 1
-            }
+        # Download PsExec if not found
+        if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
+            Write-Verbose "Downloading PsExec"
+            Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
+            Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
         } else {
-            Write-Verbose "Server Operating System detected"
-            Import-Module ServerManager
-            Install-WindowsFeature -Name RSAT-AD-PowerShell
+            Write-Verbose "PsExec already downloaded"
+        }
+        # Check that Active Directory dependencies are installed.
+        # If dependencies are missing and can be installed then do so.
+        if (-not(Get-Module -Name "ActiveDirectory")) {
+            if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
+                Write-Verbose "Workstation Operating System detected"
+                if ([Environment]::OSVersion.Version -ge [version]"10.0.18090") {
+                    Write-Verbose "Window 10 build greater than 1809 detected"
+                    function Test-Admin {
+                        $currentUser = New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())
+                        $currentUser.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+                    }
+                    if (-not(Test-Admin)) {
+                        if ($PSVersionTable.PSEdition -eq "Core") {
+                            Write-Verbose "Installing RSAT using Elevated PowerShell Core"
+                            Start-Process -Wait -Verb RunAs -FilePath pwsh.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
+
+                        } else {
+                            Write-Verbose "Installing RSAT using Elevated Windows PowerShell"
+                            Start-Process -Wait -Verb RunAs -FilePath powershell.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
+                        }
+                    } else {
+                        Write-Verbose "Installing RSAT"
+                        Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop
+                    }
+
+                } else {
+                    Write-Error "`nActive Directory Module not found. `nInstall RSAT tools to enable: `nhttps://www.microsoft.com/en-us/download/details.aspx?id=45520" -ErrorAction Stop
+                    exit 1
+                }
+            } else {
+                Write-Verbose "Server Operating System detected"
+                Import-Module ServerManager
+                Install-WindowsFeature -Name RSAT-AD-PowerShell
+            }
         }
     }
 }
@@ -410,7 +411,7 @@ foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
     $ProgressCount ++
 
-    
+
     ###################
     Start-RemoteSession
     ###################
