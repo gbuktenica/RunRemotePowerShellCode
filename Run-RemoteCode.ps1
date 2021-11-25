@@ -129,7 +129,7 @@
 
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.1.0 2021 11 24
+    Release      : v2.1.0 2021 11 25
 #>
 [CmdletBinding()]
 param (
@@ -375,11 +375,83 @@ function New-SourceList {
 }
 
 function Start-RemoteSession {
-    # If a file copy is being done map a drive with credentials
-    if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
+    [CmdletBinding()]
+    param (
+        [Parameter()] [string]
+        $ComputerName,
+        [Parameter()] [ScriptBlock]
+        $ScriptBlock,
+        [Parameter()] [string]
+        $SourcePath,
+        [Parameter()] [string]
+        $DestinationPath,
+        [Parameter()] [string]
+        $ProgressCount,
+        [Parameter()] [string]
+        $ProgressTotal
+    )
+    $StepPass = $true
+    if ($ScriptBlock.length -gt 0 -and $StepPass) {
+        Write-Verbose "Creating new PsSession"
+        if ($ConfigurationName -eq "ClientDefault") {
+            try {
+                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
+            } catch {
+                Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                # Update error log
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
+                $StepPass = $false
+            }
+        } else {
+            try {
+                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ConfigurationName $ConfigurationName -ErrorAction Stop
+            } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
+                Write-Warning "ConfigurationName: $ConfigurationName not available. Falling back to default connection."
+                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
+            } catch {
+                Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                # Update error log
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
+                $StepPass = $false
+            }
+        }
+        if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0 -and $StepPass) {
+            try {
+                Write-Verbose "Starting file copy"
+                Copy-Item -ToSession $Session -Path $SourcePath -Destination $DestinationPath -ErrorAction Stop -Recurse -Force
+            } catch {
+                Write-Warning "Computer $ComputerName copy failed"
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
+                $StepPass = $false
+                $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
+            }
+        }
+        if ($StepPass) {
+            Write-Verbose "Starting Invoke-Command"
+            try {
+                Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+            } catch [System.Management.Automation.DriveNotFoundException] {
+                Write-Warning "Computer $ComputerName connection failed"
+                # Update error log
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                Write-Debug $Error[0]
+            } catch {
+                Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                Write-Debug $Error[0]
+                $Error[0].Exception.GetType().FullName
+            }
+        }
+        if ($null -ne $Session) {
+            Write-Verbose "Removing PsSession"
+            Remove-PsSession -Session $Session
+        }
     }
-
-    # https://stackoverflow.com/questions/10741609/copy-file-remotely-with-powershell/39122508
 }
 
 #Region Main
@@ -391,8 +463,9 @@ if ($null -eq $Credential) {
         $Credential = Get-SavedCredentials -Title $Account -Renew:$Renew
     }
 }
-
+# Install required external PowerShell Modules and binaries.
 Install-Dependencies -SkipDependencies:$SkipDependencies
+# Create list of computer names to process
 $ComputerNames = New-SourceList -SourceType $SourceType -ListPath $ListPath -FilterScript $FilterScript -Filter $Filter
 if ($ScriptBlockFilePath.length -gt 0) {
     Write-Verbose "Reading File: $ScriptBlockFilePath"
@@ -402,22 +475,13 @@ if ($AsJob) {
     # Remove any existing jobs from a previous run.
     Get-Job | Remove-Job
 }
+
 $ProgressCount = 0
 $ProgressTotal = ($ComputerNames).count
 # Run the remote jobs on all computers
-
-
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
     $ProgressCount ++
-
-
-    ###################
-    Start-RemoteSession
-    ###################
-
-
-    $StepPass = $true
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
         Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
@@ -426,100 +490,7 @@ foreach ($ComputerName in $ComputerNames) {
             Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".EnablePsRemoting.txt") -Value $ComputerName
             Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
         }
-        if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-            try {
-                $Drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.DisplayRoot -match $ComputerName }
-                foreach ($Drive in $Drives) {
-                    $Message = "Removing drive " + $Drive.Name + " with path " + $Drive.DisplayRoot
-                    Write-Verbose $Message
-                    $Name = $drive.Name + ":"
-                    Remove-SmbMapping -LocalPath $Name -Force
-                }
-                Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
-                New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
-            } catch {
-                Write-Warning "Computer $ComputerName destination drive mapping failed"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
-                $StepPass = $false
-                $debugActionPreference
-                $Error[0].Exception.GetType().FullName
-                Write-Debug $Error[0]
-            }
-            try {
-                Write-Verbose "Starting file copy"
-                Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
-            } catch {
-                Write-Warning "Computer $ComputerName copy failed"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
-                $StepPass = $false
-                $debugActionPreference
-                $Error[0].Exception.GetType().FullName
-                Write-Debug $Error[0]
-            }
-        }
-        if ($ScriptBlock.length -gt 0 -and $StepPass ) {
-            Write-Verbose "Creating new PsSession"
-            if ($ConfigurationName -eq "ClientDefault") {
-                try {
-                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
-                } catch {
-                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
-                    $Error[0].Exception.GetType().FullName
-                    Write-Debug $Error[0]
-                    $StepPass = $false
-                }
-            } else {
-                try {
-                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ConfigurationName $ConfigurationName -ErrorAction Stop
-                } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
-                    Write-Warning "ConfigurationName: $ConfigurationName not available. Falling back to default connection."
-                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
-                } catch {
-                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
-                    $Error[0].Exception.GetType().FullName
-                    Write-Debug $Error[0]
-                    $StepPass = $false
-                }
-            }
-            if ($StepPass) {
-                Write-Verbose "Starting Invoke-Command"
-                try {
-                    Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
-                } catch [System.Management.Automation.DriveNotFoundException] {
-                    Write-Warning "Computer $ComputerName connection failed"
-                    # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
-                    Write-Debug $Error[0]
-                } catch {
-                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
-                    Write-Debug $Error[0]
-                    $Error[0].Exception.GetType().FullName
-                }
-            }
-            if ($null -ne $Session) {
-                Write-Verbose "Removing PsSession"
-                Remove-PsSession -Session $Session
-            }
-            # Remove destination files
-            if (Test-Path -Path "Destination:\") {
-                if (-not $Keep) {
-                    $SourcePathTail = $SourcePath -replace ("/", "\") -split ("\\")
-                    $SourcePathTail = $SourcePathTail[($SourcePathTail.length - 1)]
-                    $RemoveFolder = "Destination:\" + $SourcePathTail
-                    if (Test-Path -Path $RemoveFolder) {
-                        Write-Verbose "Removing Folder: $RemoveFolder"
-                        Remove-Item $RemoveFolder -Recurse
-                    }
-                }
-                Write-Verbose "Removing PSDrive"
-                Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-            }
-        }
+        Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath
     } else {
         Write-Warning "Computer $ComputerName not online"
         # Update connection log
