@@ -452,13 +452,18 @@ function Start-RemoteSession {
                 Write-Warning "Computer $ComputerName connection failed"
                 # Update error log
                 Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                $StepPass = $false
                 Write-Debug $Error[0]
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                $StepPass = $false
                 Write-Debug $Error[0]
                 $Error[0].Exception.GetType().FullName
             }
+        }
+        if ($StepPass) {
+            Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Success.txt") -Value $ComputerName
         }
         if ($null -ne $Session) {
             Write-Verbose "Removing PsSession"
