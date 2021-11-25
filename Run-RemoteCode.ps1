@@ -412,7 +412,7 @@ function Start-RemoteSession {
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
                 $Error[0].Exception.GetType().FullName
                 Write-Debug $Error[0]
                 $StepPass = $false
@@ -426,7 +426,7 @@ function Start-RemoteSession {
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
                 $Error[0].Exception.GetType().FullName
                 Write-Debug $Error[0]
                 $StepPass = $false
@@ -451,12 +451,12 @@ function Start-RemoteSession {
             } catch [System.Management.Automation.DriveNotFoundException] {
                 Write-Warning "Computer $ComputerName connection failed"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
                 $StepPass = $false
                 Write-Debug $Error[0]
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
                 $StepPass = $false
                 Write-Debug $Error[0]
                 $Error[0].Exception.GetType().FullName
