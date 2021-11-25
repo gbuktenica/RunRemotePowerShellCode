@@ -52,8 +52,8 @@
                 "-SourceType List",
                 "-ListPath \"${workspaceFolder}/ComputerNames.txt\"",
                 "-ScriptBlockFilePath \"${workspaceFolder}/ScriptBlock.ps1\"",
-                "-SourcePath \"\\\\FileServer/Share/SubFolder\"",
-                "-DestinationPath \"C$/Windows/Temp\""
+                "-SourcePath \"${workspaceFolder}/working\"",
+                "-DestinationPath \"C:/Windows/Temp\""
             ],
             "cwd": "${workspaceFolder}"
         },
