@@ -270,7 +270,9 @@ function Install-Dependencies {
     [CmdletBinding()]
     param (
         [Parameter()] [switch]
-        $SkipDependencies
+        $SkipDependencies,
+        [Parameter()] [ValidateSet('List', 'Directory')] [string]
+        $SourceType
     )
     if ($SkipDependencies) {
         Write-Verbose "Skipping Dependency check"
@@ -285,7 +287,7 @@ function Install-Dependencies {
         }
         # Check that Active Directory dependencies are installed.
         # If dependencies are missing and can be installed then do so.
-        if (-not(Get-Module -Name "ActiveDirectory")) {
+        if ((-not(Get-Module -Name "ActiveDirectory") -and $SourceType -eq "Directory")) {
             if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
                 Write-Verbose "Workstation Operating System detected"
                 if ([Environment]::OSVersion.Version -ge [version]"10.0.18090") {
@@ -464,7 +466,7 @@ if ($null -eq $Credential) {
     }
 }
 # Install required external PowerShell Modules and binaries.
-Install-Dependencies -SkipDependencies:$SkipDependencies
+Install-Dependencies -SkipDependencies:$SkipDependencies -SourceType $SourceType
 # Create list of computer names to process
 $ComputerNames = New-SourceList -SourceType $SourceType -ListPath $ListPath -FilterScript $FilterScript -Filter $Filter
 if ($ScriptBlockFilePath.length -gt 0) {
