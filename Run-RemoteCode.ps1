@@ -502,7 +502,8 @@ foreach ($ComputerName in $ComputerNames) {
     $ProgressCount ++
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
-        Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
+        $Message = "$ComputerName computer $ProgressCount of $ProgressTotal at " + (Get-Date -Format HH:mm:ss)
+        Write-Output $Message
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
             Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".EnablePsRemoting.txt") -Value $ComputerName
