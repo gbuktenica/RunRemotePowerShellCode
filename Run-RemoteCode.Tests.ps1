@@ -1,9 +1,7 @@
 param(
     [PsCredential] $Credential
 )
-param(
-    [PsCredential] $Credential
-)
+
 describe 'Connect to RA' {
 
     it 'attempts to connect to the remote computer' {
