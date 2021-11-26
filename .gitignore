@@ -53,12 +53,13 @@ $RECYCLE.BIN/
 
 !extensions.json
 
-# Ignore error logs
+# Ignore logs
 *NotOnline.txt
 *Error.txt
 *CopyFailed.txt
 *EnablePsRemoting.txt
 *DirectoryList.txt
+*Success.txt
 # Ignore Working directory
 working/*
 !README.md

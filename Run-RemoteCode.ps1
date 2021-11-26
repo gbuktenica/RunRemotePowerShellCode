@@ -122,64 +122,51 @@
     https://github.com/gbuktenica/RunRemotePowerShellCode
 
 .NOTES
-    Requirements : Port TCP 445  for PsExec
-                 : Port TCP 5985 for PowerShell Remoting
+    Requirements: Port TCP 5985 for PowerShell Remoting
+
+    Optional    : Port TCP 445  for PsExec
+                : Port TCP 139 / 445 for legacy file copy
+
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.0.2 2021 11 23
+    Release      : v2.1.0 2021 11 26
 #>
 [CmdletBinding()]
 param (
-    [Parameter()]
-    [ValidateSet('List', 'Directory')]
-    [string]
+    [Parameter()] [ValidateSet('List', 'Directory')] [string]
     $SourceType = 'List',
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $ListPath,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $Filter = "*",
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $SearchBase,
-    [Parameter()]
-    [ScriptBlock]
+    [Parameter()] [ScriptBlock]
     $FilterScript,
-    [Parameter()]
-    [ScriptBlock]
+    [Parameter()] [ScriptBlock]
     $ScriptBlock,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $ScriptBlockFilePath,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $SourcePath,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $DestinationPath,
-    [Parameter()]
-    [switch]
+    [Parameter()] [switch]
     $Keep,
-    [Parameter()]
-    [pscredential]
+    [Parameter()] [pscredential]
     $Credential,
-    [Parameter()]
-    [string]
+    [Parameter()] [string]
     $Account = 'Admin',
-    [Parameter()]
-    [switch]
+    [Parameter()] [switch]
     $Renew,
-    [Parameter()]
-    [switch]
+    [Parameter()] [switch]
     $NoSave,
-    [Parameter()]
-    [ValidateSet('ClientDefault', 'Microsoft.PowerShell', 'Powershell.6', 'PowerShell.7')]
-    [string]
+    [Parameter()] [ValidateSet('ClientDefault', 'Microsoft.PowerShell', 'Powershell.6', 'PowerShell.7')]    [string]
     $ConfigurationName = 'ClientDefault',
-    [Parameter()]
-    [switch]
-    $AsJob
+    [Parameter()] [switch]
+    $AsJob,
+    [Parameter()] [switch]
+    $SkipDependencies
 )
 function Get-SavedCredentials {
     <#
@@ -279,6 +266,213 @@ function Get-SavedCredentials {
     }
 }
 
+function Install-Dependencies {
+    [CmdletBinding()]
+    param (
+        [Parameter()] [switch]
+        $SkipDependencies,
+        [Parameter()] [ValidateSet('List', 'Directory')] [string]
+        $SourceType
+    )
+    if ($SkipDependencies) {
+        Write-Verbose "Skipping Dependency check"
+    } else {
+        # Download PsExec if not found
+        if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
+            Write-Verbose "Downloading PsExec"
+            Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
+            Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
+        } else {
+            Write-Verbose "PsExec already downloaded"
+        }
+        # Check that Active Directory dependencies are installed.
+        # If dependencies are missing and can be installed then do so.
+        if ((-not(Get-Module -Name "ActiveDirectory") -and $SourceType -eq "Directory")) {
+            if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
+                Write-Verbose "Workstation Operating System detected"
+                if ([Environment]::OSVersion.Version -ge [version]"10.0.18090") {
+                    Write-Verbose "Window 10 build greater than 1809 detected"
+                    function Test-Admin {
+                        $currentUser = New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())
+                        $currentUser.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+                    }
+                    if (-not(Test-Admin)) {
+                        if ($PSVersionTable.PSEdition -eq "Core") {
+                            Write-Verbose "Installing RSAT using Elevated PowerShell Core"
+                            Start-Process -Wait -Verb RunAs -FilePath pwsh.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
+
+                        } else {
+                            Write-Verbose "Installing RSAT using Elevated Windows PowerShell"
+                            Start-Process -Wait -Verb RunAs -FilePath powershell.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
+                        }
+                    } else {
+                        Write-Verbose "Installing RSAT"
+                        Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop
+                    }
+
+                } else {
+                    Write-Error "`nActive Directory Module not found. `nInstall RSAT tools to enable: `nhttps://www.microsoft.com/en-us/download/details.aspx?id=45520" -ErrorAction Stop
+                    exit 1
+                }
+            } else {
+                Write-Verbose "Server Operating System detected"
+                try {
+                    Import-Module ServerManager -ErrorAction Stop -Verbose:$false
+                    Install-WindowsFeature -Name RSAT-AD-PowerShell -ErrorAction Stop -Verbose:$false
+                } catch {
+                    Write-Error "Cannot import ServerManager Module. Script Terminating."
+                    Exit 1
+                }
+            }
+            $SavedPreference = $VerbosePreference
+            $VerbosePreference = "SilentlyContinue"
+            try {
+                Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
+            } catch {
+                Write-Error "Cannot import Active Directory Module. Script Terminating."
+                Exit 1
+            } finally {
+                $VerbosePreference = $SavedPreference
+            }
+        }
+    }
+}
+
+function New-SourceList {
+    [CmdletBinding()]
+    Param(
+        [Parameter()] [ValidateSet('List', 'Directory')] [string]
+        $SourceType,
+        [Parameter()] [string]
+        $ListPath,
+        [Parameter()] [ScriptBlock]
+        $FilterScript,
+        [Parameter()] [string]
+        $Filter
+    )
+    # Generate the list of computer names.
+    if ($SourceType -eq "List") {
+        # List SourceType selected, so read the text file.
+        if ($ListPath.length -eq 0) {
+            Write-Verbose "`$SourceType is list but `$ListPath is null so prompt operator for file path."
+            # Check that GUI dependencies are installed.
+            # If dependencies are missing and can be installed then do so.
+            if (-not (Get-Module -Name "FileSystemForms")) {
+                if (((Get-PackageProvider -Name nuget -ErrorAction SilentlyContinue).version) -lt [version]"2.8.5.201") {
+                    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+                }
+                if (-not (Get-PSRepository -Name PSGallery)) {
+                    Register-PSRepository -Default
+                }
+                Install-Module -Name FileSystemForms -ErrorAction Stop
+            }
+            $ListPath = Select-FileSystemForm -File -ext "txt"
+        } else {
+            Write-Verbose "ListPath not null. Continuing without operator input"
+        }
+        $ComputerNames = Get-Content $ListPath
+    } elseif ($SourceType -eq "Directory") {
+        Write-Output "Reading Computer Objects from Active Directory"
+        $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
+        if ($FilterScript) {
+            Write-Verbose "Running FilterScript"
+            $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
+        }
+        $ComputerNames = $ComputerNames.DNSHostName
+        # Export Computer list
+        Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".DirectoryList.txt") -Value $ComputerNames
+        Write-Output "Finished Reading Computer Objects from Active Directory"
+    }
+    # Ignore the local machine as remote connection requests will be refused.
+    $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
+}
+
+function Start-RemoteSession {
+    [CmdletBinding()]
+    param (
+        [Parameter()] [string]
+        $ComputerName,
+        [Parameter()] [ScriptBlock]
+        $ScriptBlock,
+        [Parameter()] [string]
+        $SourcePath,
+        [Parameter()] [string]
+        $DestinationPath,
+        [Parameter()] [string]
+        $ProgressCount,
+        [Parameter()] [string]
+        $ProgressTotal
+    )
+    $StepPass = $true
+    if ($ScriptBlock.length -gt 0 -and $StepPass) {
+        Write-Verbose "Creating new PsSession"
+        if ($ConfigurationName -eq "ClientDefault") {
+            try {
+                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
+            } catch {
+                Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                # Update error log
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
+                $StepPass = $false
+            }
+        } else {
+            try {
+                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ConfigurationName $ConfigurationName -ErrorAction Stop
+            } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
+                Write-Warning "ConfigurationName: $ConfigurationName not available. Falling back to default connection."
+                $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
+            } catch {
+                Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                # Update error log
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
+                $StepPass = $false
+            }
+        }
+        if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0 -and $StepPass) {
+            try {
+                Write-Verbose "Starting file copy"
+                Copy-Item -ToSession $Session -Path $SourcePath -Destination $DestinationPath -ErrorAction Stop -Recurse -Force
+            } catch {
+                Write-Warning "Computer $ComputerName copy failed"
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
+                $StepPass = $false
+                $Error[0].Exception.GetType().FullName
+                Write-Debug $Error[0]
+            }
+        }
+        if ($StepPass) {
+            Write-Verbose "Starting Invoke-Command"
+            try {
+                Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+            } catch [System.Management.Automation.DriveNotFoundException] {
+                Write-Warning "Computer $ComputerName connection failed"
+                # Update error log
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                $StepPass = $false
+                Write-Debug $Error[0]
+            } catch {
+                Write-Warning "Computer $ComputerName : $_.Exception.Message"
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                $StepPass = $false
+                Write-Debug $Error[0]
+                $Error[0].Exception.GetType().FullName
+            }
+        }
+        if ($StepPass) {
+            Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Success.txt") -Value $ComputerName
+        }
+        if ($null -ne $Session) {
+            Write-Verbose "Removing PsSession"
+            Remove-PsSession -Session $Session
+        }
+    }
+}
+
+#Region Main
 # Obtain privileged credentials from an encrypted file or operator to use to connect to the remote computers.
 if ($null -eq $Credential) {
     if ($NoSave) {
@@ -287,236 +481,35 @@ if ($null -eq $Credential) {
         $Credential = Get-SavedCredentials -Title $Account -Renew:$Renew
     }
 }
-# Download PsExec if not found
-if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
-    Write-Verbose "Downloading PsExec"
-    Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
-    Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
-} else {
-    Write-Verbose "PsExec already downloaded"
-}
-
-# If an external file has been set then read that file into an object of type scriptblock.
+# Install required external PowerShell Modules and binaries.
+Install-Dependencies -SkipDependencies:$SkipDependencies -SourceType $SourceType
+# Create list of computer names to process
+$ComputerNames = New-SourceList -SourceType $SourceType -ListPath $ListPath -FilterScript $FilterScript -Filter $Filter
 if ($ScriptBlockFilePath.length -gt 0) {
     Write-Verbose "Reading File: $ScriptBlockFilePath"
     [ScriptBlock]$ScriptBlock = [Scriptblock]::Create((Get-Content -Path $ScriptBlockFilePath -Raw -ErrorAction Stop))
 }
-
-# Generate the list of computer names.
-if ($SourceType -eq "List") {
-    # List SourceType selected, so read the text file.
-    if ($ListPath.length -eq 0) {
-        Write-Verbose "`$SourceType is list but `$ListPath is null so prompt operator for file path."
-        # Check that GUI dependencies are installed.
-        # If dependencies are missing and can be installed then do so.
-        if (-not (Get-Module -Name "FileSystemForms")) {
-            if (((Get-PackageProvider -Name nuget -ErrorAction SilentlyContinue).version) -lt [version]"2.8.5.201") {
-                Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
-            }
-            if (-not (Get-PSRepository -Name PSGallery)) {
-                Register-PSRepository -Default
-            }
-            Install-Module -Name FileSystemForms -ErrorAction Stop
-        }
-        $ListPath = Select-FileSystemForm -File -ext "txt"
-
-    } else {
-        Write-Verbose "ListPath not null. Continuing without operator input"
-    }
-    $ComputerNames = Get-Content $ListPath
-    # Ignore the local machine as remote connection requests will be refused.
-    $ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
-} elseif ($SourceType -eq "Directory") {
-    # Check that Active Directory dependencies are installed.
-    # If dependencies are missing and can be installed then do so.
-    if (-not(Get-Module -Name "ActiveDirectory")) {
-        if (((Get-CimInstance -ClassName Win32_OperatingSystem).ProductType) -eq 1) {
-            Write-Verbose "Workstation Operating System detected"
-            if ([Environment]::OSVersion.Version -ge [version]"10.0.18090") {
-                Write-Verbose "Window 10 build greater than 1809 detected"
-                function Test-Admin {
-                    $currentUser = New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())
-                    $currentUser.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
-                }
-                if (-not(Test-Admin)) {
-                    if ($PSVersionTable.PSEdition -eq "Core") {
-                        Write-Verbose "Installing RSAT using Elevated PowerShell Core"
-                        Start-Process -Wait -Verb RunAs -FilePath pwsh.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
-
-                    } else {
-                        Write-Verbose "Installing RSAT using Elevated Windows PowerShell"
-                        Start-Process -Wait -Verb RunAs -FilePath powershell.exe -ArgumentList ('-NoProfile -Command { Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop }')
-                    }
-                } else {
-                    Write-Verbose "Installing RSAT"
-                    Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0 -ErrorAction Stop
-                }
-
-            } else {
-                Write-Error "`nActive Directory Module not found. `nInstall RSAT tools to enable: `nhttps://www.microsoft.com/en-us/download/details.aspx?id=45520" -ErrorAction Stop
-                exit 1
-            }
-        } else {
-            Write-Verbose "Server Operating System detected"
-            Import-Module ServerManager
-            Install-WindowsFeature -Name RSAT-AD-PowerShell
-        }
-    }
-    $SavedPreference = $VerbosePreference
-    $VerbosePreference = "SilentlyContinue"
-    Import-Module -Name "ActiveDirectory" -ErrorAction Stop -Verbose:$false
-    $VerbosePreference = $SavedPreference
-    Write-Output "Reading Computer Objects from Active Directory"
-    $ComputerNames = Get-ADComputer -Filter $Filter -Properties *
-    if ($FilterScript) {
-        Write-Verbose "Running FilterScript"
-        $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
-    }
-    $ComputerNames = $ComputerNames.DNSHostName
-    # Export Computer list
-    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".DirectoryList.txt") -Value $ComputerNames
-    Write-Output "Finished Reading Computer Objects from Active Directory"
-}
-
-# Ignore the local machine as remote connection requests will be refused.
-$ComputerNames = $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
-
-# If a file copy is being done map a drive with credentials
-if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-    Write-Verbose "File copy requested"
-    Write-Verbose "SourcePath: $SourcePath"
-    Write-Verbose "DestinationPath: $DestinationPath"
-    # Clean up old PSDrives if not cleaned up in previous execution
-    if (Test-Path -Path "Source:\") {
-        Remove-PSDrive -Name Source -ErrorAction Stop -Force
-    }
-    if (Test-Path -Path "Destination:\") {
-        Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-    }
-    # Clean up conflicting SMB drives
-    $Drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.DisplayRoot -match (($SourcePath.replace("\\", "")).Split("\")[0]) }
-    foreach ($Drive in $Drives) {
-        $Message = "Removing drive " + $Drive.Name + " with path " + $Drive.DisplayRoot
-        Write-Verbose $Message
-        $Name = $drive.Name + ":"
-        Remove-SmbMapping -LocalPath $Name -Force
-    }
-    New-PSDrive -Name Source -Root $SourcePath -PSProvider FileSystem -Credential $Credential | Out-Null
-}
-
 if ($AsJob) {
     # Remove any existing jobs from a previous run.
     Get-Job | Remove-Job
 }
+
 $ProgressCount = 0
 $ProgressTotal = ($ComputerNames).count
 # Run the remote jobs on all computers
 foreach ($ComputerName in $ComputerNames) {
     Write-Output "======================================"
     $ProgressCount ++
-    $StepPass = $true
     if (Test-Connection $ComputerName -Count 1 -BufferSize 1 -ErrorAction SilentlyContinue) {
         $error.clear()
-        Write-Output "$ComputerName computer $ProgressCount of $ProgressTotal"
+        $Message = "$ComputerName computer $ProgressCount of $ProgressTotal at " + (Get-Date -Format HH:mm:ss)
+        Write-Output $Message
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
             Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".EnablePsRemoting.txt") -Value $ComputerName
             Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
         }
-        if ($SourcePath.Length -gt 0 -and $DestinationPath.Length -gt 0) {
-            try {
-                $Drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.DisplayRoot -match $ComputerName }
-                foreach ($Drive in $Drives) {
-                    $Message = "Removing drive " + $Drive.Name + " with path " + $Drive.DisplayRoot
-                    Write-Verbose $Message
-                    $Name = $drive.Name + ":"
-                    Remove-SmbMapping -LocalPath $Name -Force
-                }
-                Write-Verbose "Mapping PSDrive \\$ComputerName\$DestinationPath"
-                New-PSDrive -Name Destination -Root \\$ComputerName\$DestinationPath -PSProvider FileSystem -Credential $Credential -ErrorAction Stop | Out-Null
-            } catch {
-                Write-Warning "Computer $ComputerName destination drive mapping failed"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
-                $StepPass = $false
-                $debugActionPreference
-                $Error[0].Exception.GetType().FullName
-                Write-Debug $Error[0]
-            }
-            try {
-                Write-Verbose "Starting file copy"
-                Copy-Item -Path "Source:\" -Destination "Destination:\" -ErrorAction Stop -Recurse -Force
-            } catch {
-                Write-Warning "Computer $ComputerName copy failed"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".CopyFailed.txt") -Value $ComputerName
-                $StepPass = $false
-                $debugActionPreference
-                $Error[0].Exception.GetType().FullName
-                Write-Debug $Error[0]
-            }
-        }
-        if ($ScriptBlock.length -gt 0 -and $StepPass ) {
-            Write-Verbose "Creating new PsSession"
-            if ($ConfigurationName -eq "ClientDefault") {
-                try {
-                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Stop
-                } catch {
-                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
-                    $Error[0].Exception.GetType().FullName
-                    Write-Debug $Error[0]
-                    $StepPass = $false
-                }
-            } else {
-                try {
-                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential -ConfigurationName $ConfigurationName -ErrorAction Stop
-                } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
-                    Write-Warning "ConfigurationName: $ConfigurationName not available. Falling back to default connection."
-                    $Session = New-PsSession -ComputerName $ComputerName -Credential $Credential
-                } catch {
-                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
-                    $Error[0].Exception.GetType().FullName
-                    Write-Debug $Error[0]
-                    $StepPass = $false
-                }
-            }
-            if ($StepPass) {
-                Write-Verbose "Starting Invoke-Command"
-                try {
-                    Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
-                } catch [System.Management.Automation.DriveNotFoundException] {
-                    Write-Warning "Computer $ComputerName connection failed"
-                    # Update error log
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
-                    Write-Debug $Error[0]
-                } catch {
-                    Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value $ComputerName
-                    Write-Debug $Error[0]
-                    $Error[0].Exception.GetType().FullName
-                }
-            }
-            if ($null -ne $Session) {
-                Write-Verbose "Removing PsSession"
-                Remove-PsSession -Session $Session
-            }
-            # Remove destination files
-            if (Test-Path -Path "Destination:\") {
-                if (-not $Keep) {
-                    $SourcePathTail = $SourcePath -replace ("/", "\") -split ("\\")
-                    $SourcePathTail = $SourcePathTail[($SourcePathTail.length - 1)]
-                    $RemoveFolder = "Destination:\" + $SourcePathTail
-                    if (Test-Path -Path $RemoveFolder) {
-                        Write-Verbose "Removing Folder: $RemoveFolder"
-                        Remove-Item $RemoveFolder -Recurse
-                    }
-                }
-                Write-Verbose "Removing PSDrive"
-                Remove-PSDrive -Name Destination -ErrorAction Stop -Force
-            }
-        }
+        Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath
     } else {
         Write-Warning "Computer $ComputerName not online"
         # Update connection log
@@ -532,3 +525,4 @@ if ($AsJob) {
     Write-Output "Jobs complete"
     Get-Job | Receive-Job
 }
+#Endregion

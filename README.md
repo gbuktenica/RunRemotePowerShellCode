@@ -57,8 +57,8 @@ This will run the inline Script Block against all computer objects that are cont
 If this is the first run of the script the operator will be prompted to enter privileged credentials.
 
 ```powershell
-.\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -FilterScript {$_.PasswordLastSet -ge ((Get-Date).AddDays(-90))} -SourcePath \\FileServer\Files -DestinationPath C$\Windows\temp
+.\Run-RemoteCode.ps1 -SourceType Directory -Filter "*" -FilterScript {$_.PasswordLastSet -ge ((Get-Date).AddDays(-90))} -SourcePath C:\Scripts -DestinationPath C:\Windows\temp
 ```
 
-This will copy the contents of \\FileServer\Files to C$\Windows\temp on all computer objects that are contained in the default Active Directory that have been on the network in the last 90 days.
+This will copy the contents of C:\Scripts on the operator workstation to C:\Windows\temp on all computer objects that are contained in the default Active Directory that have been on the network in the last 90 days.
 If this is the first run of the script the operator will be prompted to enter privileged credentials.
