@@ -12,14 +12,24 @@
 
 ### VisualStudioCode ###
 .vscode/*
+!.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
-*.code-workspace
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
 
 ### VisualStudioCode Patch ###
 # Ignore all local history of files
 .history
 .ionide
+
+# Support for Project snippet scope
 
 ### Windows ###
 # Windows thumbnail cache files
@@ -60,6 +70,9 @@ $RECYCLE.BIN/
 *EnablePsRemoting.txt
 *DirectoryList.txt
 *Success.txt
+
+# Ignore Binarys
+*.exe
 # Ignore Working directory
 working/*
 !README.md
