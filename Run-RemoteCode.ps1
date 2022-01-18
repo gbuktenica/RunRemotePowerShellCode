@@ -129,7 +129,7 @@
 
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.1.0 2021 11 26
+    Release      : v2.1.1 2022 01 18
 #>
 [CmdletBinding()]
 param (
@@ -378,7 +378,7 @@ function New-SourceList {
             Write-Verbose "Running FilterScript"
             $ComputerNames = $ComputerNames | Where-Object -FilterScript $FilterScript
         }
-        $ComputerNames = $ComputerNames.DNSHostName
+        $ComputerNames = $ComputerNames.DNSHostName | Sort-Object
         # Export Computer list
         Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".DirectoryList.txt") -Value $ComputerNames
         Write-Output "Finished Reading Computer Objects from Active Directory"
