@@ -7,8 +7,8 @@
     Sorts the file .\working\computernames.txt and removes all lines with VDC.
 .NOTES
     License      : MIT License
-    Copyright (c): 2021 Glen Buktenica
-    Release      : 2021 11 18
+    Copyright (c): 2021 - 2022 Glen Buktenica
+    Release      : 2022 02 17
 #>
 [CmdletBinding()]
 param (
@@ -19,4 +19,5 @@ param (
     [string]
     $Path = ".\working\computernames.txt"
 )
-Get-Content -Path $Path | Where-Object { $_ -notlike "*$FilterString*" } | Sort-Object | Out-File $Path
+[String[]]$Text = Get-Content -Path $Path | Where-Object { $_ -notlike "*$FilterString*" } | Sort-Object
+$Text | Out-File $Path
