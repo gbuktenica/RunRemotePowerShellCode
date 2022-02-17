@@ -129,7 +129,7 @@
 
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.1.1 2022 01 18
+    Release      : v2.2.0 2022 02 17
 #>
 [CmdletBinding()]
 param (
@@ -166,7 +166,9 @@ param (
     [Parameter()] [switch]
     $AsJob,
     [Parameter()] [switch]
-    $SkipDependencies
+    $SkipDependencies,
+    [Parameter()] [switch]
+    $SkipPsExec
 )
 function Get-SavedCredentials {
     <#
@@ -412,7 +414,7 @@ function Start-RemoteSession {
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + "," + ($Error[0].Exception.GetType().FullName) + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
                 $Error[0].Exception.GetType().FullName
                 Write-Debug $Error[0]
                 $StepPass = $false
@@ -426,7 +428,7 @@ function Start-RemoteSession {
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + "," + ($Error[0].Exception.GetType().FullName) + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
                 $Error[0].Exception.GetType().FullName
                 Write-Debug $Error[0]
                 $StepPass = $false
@@ -451,12 +453,12 @@ function Start-RemoteSession {
             } catch [System.Management.Automation.DriveNotFoundException] {
                 Write-Warning "Computer $ComputerName connection failed"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + "," + ($Error[0].Exception.GetType().FullName) + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
                 $StepPass = $false
                 Write-Debug $Error[0]
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + "," + ($Error[0].Exception.GetType().FullName) + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
                 $StepPass = $false
                 Write-Debug $Error[0]
                 $Error[0].Exception.GetType().FullName
@@ -507,9 +509,13 @@ foreach ($ComputerName in $ComputerNames) {
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
             Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".EnablePsRemoting.txt") -Value $ComputerName
-            Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
+            if (-not $SkipPsExec) {
+                Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
+                Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath
+            }
+        } else {
+            Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath
         }
-        Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath
     } else {
         Write-Warning "Computer $ComputerName not online"
         # Update connection log
