@@ -273,6 +273,8 @@ function Install-Dependencies {
     param (
         [Parameter()] [switch]
         $SkipDependencies,
+        [Parameter()] [switch]
+        $SkipPsExec,
         [Parameter()] [ValidateSet('List', 'Directory')] [string]
         $SourceType
     )
@@ -280,13 +282,18 @@ function Install-Dependencies {
         Write-Verbose "Skipping Dependency check"
     } else {
         # Download PsExec if not found
-        if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
-            Write-Verbose "Downloading PsExec"
-            Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
-            Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
+        if ( -not $SkipPsExec) {
+            if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
+                Write-Verbose "Downloading PsExec"
+                Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
+                Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
+            } else {
+                Write-Verbose "PsExec already downloaded"
+            }
         } else {
-            Write-Verbose "PsExec already downloaded"
+            Write-Verbose "PsExec not required"
         }
+
         # Check that Active Directory dependencies are installed.
         # If dependencies are missing and can be installed then do so.
         if ((-not(Get-Module -Name "ActiveDirectory") -and $SourceType -eq "Directory")) {
@@ -484,7 +491,7 @@ if ($null -eq $Credential) {
     }
 }
 # Install required external PowerShell Modules and binaries.
-Install-Dependencies -SkipDependencies:$SkipDependencies -SourceType $SourceType
+Install-Dependencies -SkipDependencies:$SkipDependencies -SourceType $SourceType -SkipPsExec:$SkipPsExec
 # Create list of computer names to process
 $ComputerNames = New-SourceList -SourceType $SourceType -ListPath $ListPath -FilterScript $FilterScript -Filter $Filter
 if ($ScriptBlockFilePath.length -gt 0) {
