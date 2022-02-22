@@ -70,7 +70,7 @@ $RECYCLE.BIN/
 *EnablePsRemoting.txt
 *DirectoryList.txt
 *Success.txt
-
+*Output.txt
 # Ignore Binarys
 *.exe
 # Ignore Working directory

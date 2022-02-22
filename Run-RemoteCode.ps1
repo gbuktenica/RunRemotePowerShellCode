@@ -129,7 +129,7 @@
 
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.2.0 2022 02 17
+    Release      : v2.2.0 2022 02 22
 #>
 [CmdletBinding()]
 param (
@@ -168,7 +168,9 @@ param (
     [Parameter()] [switch]
     $SkipDependencies,
     [Parameter()] [switch]
-    $SkipPsExec
+    $SkipPsExec,
+    [Parameter()] [switch]
+    $LogToFile
 )
 function Get-SavedCredentials {
     <#
@@ -410,7 +412,9 @@ function Start-RemoteSession {
         [Parameter()] [string]
         $ProgressCount,
         [Parameter()] [string]
-        $ProgressTotal
+        $ProgressTotal,
+        [Parameter()] [switch]
+        $LogToFile
     )
     $StepPass = $true
     if ($ScriptBlock.length -gt 0 -and $StepPass) {
@@ -456,7 +460,13 @@ function Start-RemoteSession {
         if ($StepPass) {
             Write-Verbose "Starting Invoke-Command"
             try {
-                Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+                $RemoteOutput = Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+                if ($LogToFile) {
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Output.txt") -Value '==================================================='
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Output.txt") -Value ($ComputerName + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Output.txt") -Value $RemoteOutput
+                }
+                $RemoteOutput
             } catch [System.Management.Automation.DriveNotFoundException] {
                 Write-Warning "Computer $ComputerName connection failed"
                 # Update error log
@@ -518,11 +528,9 @@ foreach ($ComputerName in $ComputerNames) {
             Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".EnablePsRemoting.txt") -Value $ComputerName
             if (-not $SkipPsExec) {
                 Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
-                Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath
             }
-        } else {
-            Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath
         }
+        Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath -LogToFile:$LogToFile
     } else {
         Write-Warning "Computer $ComputerName not online"
         # Update connection log
