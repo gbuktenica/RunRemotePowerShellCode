@@ -129,7 +129,7 @@
 
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.2.0 2022 02 22
+    Release      : v2.2.1 2022 02 22
 #>
 [CmdletBinding()]
 param (
@@ -395,7 +395,7 @@ function New-SourceList {
         Write-Output "Finished Reading Computer Objects from Active Directory"
     }
     # Ignore the local machine as remote connection requests will be refused.
-    $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME }
+    $ComputerNames | Where-Object -FilterScript { $_ -notmatch "$env:COMPUTERNAME.*" -and $_ -ne $env:COMPUTERNAME -and $_[0] -ne '#'}
 }
 
 function Start-RemoteSession {
