@@ -129,7 +129,7 @@
 
     License      : MIT License
     Copyright (c): 2021 Glen Buktenica
-    Release      : v2.1.1 2022 01 18
+    Release      : v2.2.0 2022 02 22
 #>
 [CmdletBinding()]
 param (
@@ -166,7 +166,11 @@ param (
     [Parameter()] [switch]
     $AsJob,
     [Parameter()] [switch]
-    $SkipDependencies
+    $SkipDependencies,
+    [Parameter()] [switch]
+    $SkipPsExec,
+    [Parameter()] [switch]
+    $LogToFile
 )
 function Get-SavedCredentials {
     <#
@@ -271,6 +275,8 @@ function Install-Dependencies {
     param (
         [Parameter()] [switch]
         $SkipDependencies,
+        [Parameter()] [switch]
+        $SkipPsExec,
         [Parameter()] [ValidateSet('List', 'Directory')] [string]
         $SourceType
     )
@@ -278,13 +284,18 @@ function Install-Dependencies {
         Write-Verbose "Skipping Dependency check"
     } else {
         # Download PsExec if not found
-        if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
-            Write-Verbose "Downloading PsExec"
-            Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
-            Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
+        if ( -not $SkipPsExec) {
+            if (-not (Test-Path "$env:TEMP\PSExec64.exe")) {
+                Write-Verbose "Downloading PsExec"
+                Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile $env:TEMP\PSTools.zip
+                Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath $env:TEMP
+            } else {
+                Write-Verbose "PsExec already downloaded"
+            }
         } else {
-            Write-Verbose "PsExec already downloaded"
+            Write-Verbose "PsExec not required"
         }
+
         # Check that Active Directory dependencies are installed.
         # If dependencies are missing and can be installed then do so.
         if ((-not(Get-Module -Name "ActiveDirectory") -and $SourceType -eq "Directory")) {
@@ -401,7 +412,9 @@ function Start-RemoteSession {
         [Parameter()] [string]
         $ProgressCount,
         [Parameter()] [string]
-        $ProgressTotal
+        $ProgressTotal,
+        [Parameter()] [switch]
+        $LogToFile
     )
     $StepPass = $true
     if ($ScriptBlock.length -gt 0 -and $StepPass) {
@@ -412,7 +425,7 @@ function Start-RemoteSession {
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + "," + ($Error[0].Exception.GetType().FullName) + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
                 $Error[0].Exception.GetType().FullName
                 Write-Debug $Error[0]
                 $StepPass = $false
@@ -426,7 +439,7 @@ function Start-RemoteSession {
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + "," + ($Error[0].Exception.GetType().FullName) + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
                 $Error[0].Exception.GetType().FullName
                 Write-Debug $Error[0]
                 $StepPass = $false
@@ -447,16 +460,22 @@ function Start-RemoteSession {
         if ($StepPass) {
             Write-Verbose "Starting Invoke-Command"
             try {
-                Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+                $RemoteOutput = Invoke-Command -Session $Session -AsJob:$AsJob -ScriptBlock $ScriptBlock -ErrorAction Stop
+                if ($LogToFile) {
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Output.txt") -Value '==================================================='
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Output.txt") -Value ($ComputerName + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
+                    Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Output.txt") -Value $RemoteOutput
+                }
+                $RemoteOutput
             } catch [System.Management.Automation.DriveNotFoundException] {
                 Write-Warning "Computer $ComputerName connection failed"
                 # Update error log
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + "," + ($Error[0].Exception.GetType().FullName) + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
                 $StepPass = $false
                 Write-Debug $Error[0]
             } catch {
                 Write-Warning "Computer $ComputerName : $_.Exception.Message"
-                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + " " + ($Error[0].Exception.GetType().FullName))
+                Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".Error.txt") -Value ($ComputerName + "," + ($Error[0].Exception.GetType().FullName) + "," + (Get-Date -Format "yyyyMMdd HH:mm"))
                 $StepPass = $false
                 Write-Debug $Error[0]
                 $Error[0].Exception.GetType().FullName
@@ -482,7 +501,7 @@ if ($null -eq $Credential) {
     }
 }
 # Install required external PowerShell Modules and binaries.
-Install-Dependencies -SkipDependencies:$SkipDependencies -SourceType $SourceType
+Install-Dependencies -SkipDependencies:$SkipDependencies -SourceType $SourceType -SkipPsExec:$SkipPsExec
 # Create list of computer names to process
 $ComputerNames = New-SourceList -SourceType $SourceType -ListPath $ListPath -FilterScript $FilterScript -Filter $Filter
 if ($ScriptBlockFilePath.length -gt 0) {
@@ -507,9 +526,11 @@ foreach ($ComputerName in $ComputerNames) {
         if (-not([bool](Test-WSMan -ComputerName $ComputerName -ErrorAction SilentlyContinue))) {
             Write-Verbose "Remote PowerShell not enabled"
             Add-Content -Path (($PSCommandPath).Replace(".ps1", "") + ".EnablePsRemoting.txt") -Value $ComputerName
-            Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
+            if (-not $SkipPsExec) {
+                Start-Process "$env:TEMP\PSExec64.exe" -ArgumentList "-NoBanner \\$ComputerName -s PowerShell.exe -Command Enable-PsRemoting -Force" -Wait -Credential $Credential
+            }
         }
-        Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath
+        Start-RemoteSession -ComputerName $ComputerName -ScriptBlock $ScriptBlock -SourcePath $SourcePath -DestinationPath $DestinationPath -LogToFile:$LogToFile
     } else {
         Write-Warning "Computer $ComputerName not online"
         # Update connection log
